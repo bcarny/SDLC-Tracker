@@ -95,6 +95,8 @@ model Assessment {
   assessmentDate DateTime       @map("assessment_date")
   assessor      String?
   status        AssessmentStatus @default(draft)
+  // Reference UI format: { rp1: 0, rp2: 1, ... } for 16 criteria (levels 0-4)
+  scoresSnapshot Json?         @map("scores_snapshot")
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
 

@@ -9,15 +9,20 @@ src/
 ├── config/
 │   ├── env.ts            # Environment validation (Zod)
 │   └── db.ts             # Prisma client singleton
-├── routes/               # HTTP only: validate input, call services, return JSON
+├── routes/
 │   ├── healthRoutes.ts
-│   └── applicationRoutes.ts
-├── services/             # Use-case logic: call repositories, no HTTP/DB details
+│   ├── applicationRoutes.ts   # apps + :id/teams, :id/assessments
+│   ├── teamRoutes.ts
+│   └── assessmentRoutes.ts    # POST / (applicationId, teamId?, scores)
+├── services/
 │   ├── healthService.ts
-│   └── applicationService.ts
-├── repositories/         # All DB access per entity (Prisma)
-│   ├── applicationRepository.ts
-│   └── teamRepository.ts
+│   ├── applicationService.ts  # addTeamToApplication, removeTeamFromApplication
+│   ├── teamService.ts
+│   └── assessmentService.ts  # getAssessmentsForApplication, saveAssessment
+├── repositories/
+│   ├── applicationRepository.ts  # addTeam, removeTeam; list includes assessments
+│   ├── teamRepository.ts
+│   └── assessmentRepository.ts   # listByApplication, create
 └── integrations/         # (Future) ServiceNow, Power BI clients – one entry per system
 ```
 
@@ -26,7 +31,7 @@ src/
 - **Request** → route (validation) → service → repository → Prisma → DB
 - **Response** ← route ← service ← repository
 
-Routes do not call repositories directly. External systems are used only from `integrations/` and called by services.
+**Application-first model:** Applications are the primary entity. Teams are linked to applications (many-to-many). Assessments belong to an application and optionally to a team (application-level vs team-level). Not all applications can reach the same maturity (e.g. SaaS, COTS); the UI supports assessing at both application and team scope.
 
 ## Where to change what
 

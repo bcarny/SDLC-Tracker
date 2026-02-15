@@ -1,6 +1,7 @@
-import { ApplicationSource, ApplicationType } from '@prisma/client';
+import { ApplicationSource, ApplicationType, TeamRole } from '@prisma/client';
 import type { CreateApplicationInput, UpdateApplicationInput } from '../repositories/applicationRepository.js';
 import { applicationRepository } from '../repositories/applicationRepository.js';
+import { teamRepository } from '../repositories/teamRepository.js';
 
 export type ApplicationFilters = { type?: ApplicationType; source?: ApplicationSource };
 
@@ -39,5 +40,20 @@ export const applicationService = {
   async delete(id: string) {
     await this.getById(id);
     return applicationRepository.delete(id);
+  },
+
+  async addTeamToApplication(applicationId: string, teamId: string, role?: TeamRole) {
+    await this.getById(applicationId);
+    const team = await teamRepository.findById(teamId);
+    if (!team) throw new Error('Team not found');
+    const app = await applicationRepository.findById(applicationId);
+    const alreadyLinked = app?.teams.some((at) => at.teamId === teamId);
+    if (alreadyLinked) throw new Error('Team is already linked to this application');
+    return applicationRepository.addTeam(applicationId, teamId, role ?? 'supporting');
+  },
+
+  async removeTeamFromApplication(applicationId: string, teamId: string) {
+    await this.getById(applicationId);
+    return applicationRepository.removeTeam(applicationId, teamId);
   },
 };

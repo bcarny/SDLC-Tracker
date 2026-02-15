@@ -10,12 +10,22 @@ vi.mock('../repositories/applicationRepository.js', () => ({
     update: vi.fn(),
     delete: vi.fn(),
     list: vi.fn(),
+    findByName: vi.fn(),
+    addTeam: vi.fn(),
+    removeTeam: vi.fn(),
+  },
+}));
+vi.mock('../repositories/teamRepository.js', () => ({
+  teamRepository: {
+    findById: vi.fn(),
   },
 }));
 
 import * as applicationRepository from '../repositories/applicationRepository.js';
+import * as teamRepository from '../repositories/teamRepository.js';
 
 const repo = applicationRepository.applicationRepository;
+const teamRepo = teamRepository.teamRepository;
 
 describe('applicationService', () => {
   beforeEach(() => {
@@ -24,6 +34,8 @@ describe('applicationService', () => {
     vi.mocked(repo.create).mockReset();
     vi.mocked(repo.update).mockReset();
     vi.mocked(repo.delete).mockReset();
+    vi.mocked(repo.addTeam).mockReset();
+    vi.mocked(repo.removeTeam).mockReset();
   });
 
   describe('create', () => {
@@ -103,6 +115,38 @@ describe('applicationService', () => {
       vi.mocked(repo.findById).mockResolvedValue(null);
 
       await expect(applicationService.getById('missing')).rejects.toThrow('Application not found');
+    });
+  });
+
+  describe('addTeamToApplication', () => {
+    it('adds team when application and team exist and team is not already linked', async () => {
+      vi.mocked(repo.findById).mockResolvedValue({
+        id: 'app-1',
+        name: 'App',
+        teams: [],
+        assessments: [],
+      } as never);
+      vi.mocked(teamRepo.findById).mockResolvedValue({ id: 'team-1', name: 'Team 1' } as never);
+      vi.mocked(repo.addTeam).mockResolvedValue({ applicationId: 'app-1', teamId: 'team-1', team: { name: 'Team 1' } } as never);
+
+      await applicationService.addTeamToApplication('app-1', 'team-1');
+
+      expect(repo.addTeam).toHaveBeenCalledWith('app-1', 'team-1', 'supporting');
+    });
+
+    it('throws when team is already linked', async () => {
+      vi.mocked(repo.findById).mockResolvedValue({
+        id: 'app-1',
+        name: 'App',
+        teams: [{ teamId: 'team-1' }],
+        assessments: [],
+      } as never);
+      vi.mocked(teamRepo.findById).mockResolvedValue({ id: 'team-1', name: 'Team 1' } as never);
+
+      await expect(applicationService.addTeamToApplication('app-1', 'team-1')).rejects.toThrow(
+        /already linked/
+      );
+      expect(repo.addTeam).not.toHaveBeenCalled();
     });
   });
 });

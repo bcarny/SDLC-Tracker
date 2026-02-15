@@ -1,4 +1,4 @@
-import { ApplicationSource, ApplicationType, Prisma } from '@prisma/client';
+import { ApplicationSource, ApplicationType, Prisma, TeamRole } from '@prisma/client';
 import { prisma } from '../config/db.js';
 
 export type CreateApplicationInput = {
@@ -20,7 +20,10 @@ export const applicationRepository = {
   async findById(id: string) {
     return prisma.application.findUnique({
       where: { id },
-      include: { teams: { include: { team: true } }, assessments: true },
+      include: {
+        teams: { include: { team: true } },
+        assessments: { include: { team: true }, orderBy: { assessmentDate: 'desc' } },
+      },
     });
   },
 
@@ -37,7 +40,10 @@ export const applicationRepository = {
     if (filters?.source) where.source = filters.source;
     return prisma.application.findMany({
       where,
-      include: { teams: { include: { team: true } } },
+      include: {
+        teams: { include: { team: true } },
+        assessments: { include: { team: true }, orderBy: { assessmentDate: 'desc' } },
+      },
       orderBy: { name: 'asc' },
     });
   },
@@ -51,5 +57,24 @@ export const applicationRepository = {
 
   async delete(id: string) {
     return prisma.application.delete({ where: { id } });
+  },
+
+  async findByName(name: string) {
+    return prisma.application.findFirst({
+      where: { name },
+    });
+  },
+
+  async addTeam(applicationId: string, teamId: string, role: TeamRole = 'supporting') {
+    return prisma.applicationTeam.create({
+      data: { applicationId, teamId, role },
+      include: { team: true },
+    });
+  },
+
+  async removeTeam(applicationId: string, teamId: string) {
+    return prisma.applicationTeam.delete({
+      where: { applicationId_teamId: { applicationId, teamId } },
+    });
   },
 };

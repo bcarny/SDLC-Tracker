@@ -1,6 +1,6 @@
 # SDLC Maturity Tracker
 
-FFIEC-aligned SDLC maturity tracker for applications and teams. Supports manual application entry or sync from ServiceNow CMDB/APM, application–team relationships, maturity comparison across teams, and export to Power BI and ServiceNow.
+FFIEC-aligned SDLC maturity tracker with an **application-first** workflow. Applications are the primary entity; you link teams to applications and assess maturity at the **application level** and/or **per team**. Application and team maturity are correlated, but not all applications can reach the same maturity (e.g. SaaS/COTS have limited control). Supports manual entry, ServiceNow CMDB/APM sync (planned), comparison across applications and teams, and export to Power BI and ServiceNow.
 
 ## Prerequisites
 
@@ -45,7 +45,11 @@ npm run dev
 
 - **App (frontend):** http://localhost:3000  
 - **Health:** http://localhost:3000/health  
-- **API:** http://localhost:3000/api — Applications: `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id`
+- **API:** http://localhost:3000/api  
+  - Applications: `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id`  
+  - Link teams: `POST /api/applications/:id/teams` (body: `{ teamId }`), `DELETE /api/applications/:id/teams/:teamId`  
+  - Assessments: `GET /api/applications/:id/assessments` (all assessments for history), `POST /api/assessments` (body: `{ applicationId, teamId?, scores }`)  
+  - Teams: `GET/POST /api/teams`, `GET/DELETE /api/teams/:id` (delete removes the team and unlinks from applications)
 
 ## Scripts
 
