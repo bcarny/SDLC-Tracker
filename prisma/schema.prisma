@@ -1,0 +1,124 @@
+// SDLC Maturity Tracker - FFIEC-aligned data model
+// https://ithandbook.ffiec.gov/it-booklets/development-acquisition-and-maintenance/
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ApplicationType {
+  Custom
+  SaaS
+  COTS
+}
+
+enum ApplicationSource {
+  manual
+  servicenow
+}
+
+enum AssessmentStatus {
+  draft
+  completed
+}
+
+enum TeamRole {
+  primary
+  supporting
+}
+
+// FFIEC maturity dimensions (IV.O.1 SDLC + governance, risk, change mgmt, third-party)
+enum MaturityDimension {
+  governance
+  risk_management
+  initiation
+  development_acquisition
+  implementation_assessment
+  operations_maintenance
+  sunset_disposal
+  change_management
+  third_party
+}
+
+model Application {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  type        ApplicationType
+  externalId  String?           @unique @map("external_id")
+  source      ApplicationSource @default(manual)
+  // JSON array of MaturityDimension values that apply (e.g. SaaS may omit development_acquisition)
+  dimensions  String?           @db.Text // stored as JSON array
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  teams       ApplicationTeam[]
+  assessments Assessment[]
+
+  @@map("applications")
+}
+
+model Team {
+  id         String   @id @default(cuid())
+  name       String
+  externalId String?  @unique @map("external_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  applications ApplicationTeam[]
+  assessments  Assessment[]
+
+  @@map("teams")
+}
+
+model ApplicationTeam {
+  applicationId String       @map("application_id")
+  teamId        String       @map("team_id")
+  role          TeamRole     @default(supporting)
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([applicationId, teamId])
+  @@map("application_teams")
+}
+
+model Assessment {
+  id             String          @id @default(cuid())
+  applicationId String          @map("application_id")
+  teamId        String?         @map("team_id") // null = application-level assessment
+  assessmentDate DateTime       @map("assessment_date")
+  assessor      String?
+  status        AssessmentStatus @default(draft)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  team         Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  maturityScores MaturityScore[]
+
+  @@index([applicationId])
+  @@index([teamId])
+  @@map("assessments")
+}
+
+model MaturityScore {
+  id          String           @id @default(cuid())
+  assessmentId String         @map("assessment_id")
+  dimension   MaturityDimension
+  level       Int              // 1-5 CMMI-style
+  evidence    String?          @db.Text
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, dimension])
+  @@index([assessmentId])
+  @@map("maturity_scores")
+}

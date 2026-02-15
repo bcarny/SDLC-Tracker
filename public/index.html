@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SDLC Maturity Tracker</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>SDLC Maturity Tracker</h1>
+    <p class="subtitle">FFIEC-aligned application and team maturity</p>
+    <div id="health" class="health" aria-live="polite"></div>
+  </header>
+
+  <main class="main">
+    <section class="card">
+      <h2>Add application</h2>
+      <form id="add-form" class="form">
+        <label>
+          Name <input type="text" name="name" required minlength="1" maxlength="500" />
+        </label>
+        <label>
+          Description <input type="text" name="description" maxlength="2000" />
+        </label>
+        <label>
+          Type
+          <select name="type" required>
+            <option value="Custom">Custom</option>
+            <option value="SaaS">SaaS</option>
+            <option value="COTS">COTS</option>
+          </select>
+        </label>
+        <button type="submit">Add application</button>
+      </form>
+      <div id="form-message" class="message" role="alert"></div>
+    </section>
+
+    <section class="card">
+      <h2>Applications</h2>
+      <div id="filters" class="filters">
+        <label>Type <select id="filter-type"><option value="">All</option><option value="Custom">Custom</option><option value="SaaS">SaaS</option><option value="COTS">COTS</option></select></label>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+      <div id="list" class="list">
+        <p class="muted">Loading…</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a href="/api">API info</a> · <a href="/health">Health</a>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>

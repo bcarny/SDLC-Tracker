@@ -1,0 +1,15 @@
+# Local PostgreSQL for development. Run: docker-compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sdlc
+    volumes:
+      - sdlc_pgdata:/var/lib/postgresql/data
+
+volumes:
+  sdlc_pgdata:
