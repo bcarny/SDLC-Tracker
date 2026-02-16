@@ -14,7 +14,8 @@ const maturityCriteria = {
     ],
     "Development & Code Quality": [
         { id: "dc1", name: "Coding Standards & Reviews", levels: ["None", "Informal guidelines", "Documented & required", "Structured & enforced", "Automated compliance"] },
-        { id: "dc2", name: "Version Control & Technical Debt", levels: ["None/minimal", "Basic usage", "Branching strategy & tracking", "Advanced practices & prioritization", "GitOps & continuous reduction"] }
+        { id: "dc2", name: "Version Control & Technical Debt", levels: ["None/minimal", "Basic usage", "Branching strategy & tracking", "Advanced practices & prioritization", "GitOps & continuous reduction"] },
+        { id: "dc3", name: "AI Coding Assistants & Agentic Development", levels: ["None/not used", "Individual ad-hoc use (e.g. Copilot)", "Team-wide adoption with guidelines", "Integrated into workflows & code review", "Agentic development with autonomous AI agents"] }
     ],
     "Testing & Quality Assurance": [
         { id: "tq1", name: "Test Coverage & Automation", levels: ["<20% manual only", "20-40% some automation", "40-60% unit + integration", "60-80% comprehensive", ">80% AI-assisted"] },
@@ -48,8 +49,11 @@ const ffiecLevels = [
 
 function calculateMaturityScore(scoresSnapshot) {
     if (!scoresSnapshot || Object.keys(scoresSnapshot).length === 0) return 0;
-    const totalCriteria = Object.values(maturityCriteria).reduce((sum, cat) => sum + cat.length, 0);
     const totalScore = Object.values(scoresSnapshot).reduce((sum, level) => sum + level, 0);
+    // Normalize old assessments: if dc3 is missing, use original 16-criteria max (64)
+    // Otherwise use current 17-criteria max (68)
+    const isOldAssessment = !(scoresSnapshot.hasOwnProperty('dc3'));
+    const totalCriteria = isOldAssessment ? 16 : Object.values(maturityCriteria).reduce((sum, cat) => sum + cat.length, 0);
     const maxScore = totalCriteria * 4;
     return Math.round((totalScore / maxScore) * 100);
 }
@@ -64,9 +68,14 @@ function getFFIECLevel(score) {
 
 function getCategoryScore(category, scoresSnapshot) {
     const criteria = maturityCriteria[category];
-    const scores = criteria.map(c => (scoresSnapshot || {})[c.id] || 0);
+    // For old assessments (missing dc3), exclude dc3 from "Development & Code Quality" calculations
+    const isOldAssessment = !(scoresSnapshot && scoresSnapshot.hasOwnProperty('dc3'));
+    const criteriaToUse = (isOldAssessment && category === "Development & Code Quality") 
+        ? criteria.filter(c => c.id !== 'dc3')
+        : criteria;
+    const scores = criteriaToUse.map(c => (scoresSnapshot || {})[c.id] || 0);
     const total = scores.reduce((sum, s) => sum + s, 0);
-    const max = criteria.length * 4;
+    const max = criteriaToUse.length * 4;
     return max ? Math.round((total / max) * 100) : 0;
 }
 
@@ -84,6 +93,10 @@ function SDLCMaturityTracker() {
     const [newAppType, setNewAppType] = useState("Custom");
     const [newTeamName, setNewTeamName] = useState("");
     const [addTeamAppId, setAddTeamAppId] = useState(null);
+    const [editingAppId, setEditingAppId] = useState(null);
+    const [editingAppName, setEditingAppName] = useState("");
+    const [editingTeamId, setEditingTeamId] = useState(null);
+    const [editingTeamName, setEditingTeamName] = useState("");
     const chartRef = useRef(null);
     const radarChartRef = useRef(null);
     const historyChartRef = useRef(null);
@@ -142,6 +155,26 @@ function SDLCMaturityTracker() {
             setNewAppName("");
             setNewAppDescription("");
             await loadApplications();
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    const updateApplicationName = async (id, newName) => {
+        if (!newName.trim()) return;
+        try {
+            const res = await fetch(API + '/applications/' + id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim() })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+            setEditingAppId(null);
+            setEditingAppName("");
+            await loadApplications();
+            if (selectedApplication?.id === id) {
+                await loadApplicationDetail(id);
+            }
         } catch (err) {
             setError(err.message);
         }
@@ -216,6 +249,25 @@ function SDLCMaturityTracker() {
             if (!res.ok) throw new Error((await res.json()).error || res.statusText);
             setNewTeamName("");
             await loadTeams();
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    const updateTeamName = async (id, newName) => {
+        if (!newName.trim()) return;
+        try {
+            const res = await fetch(API + '/teams/' + id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim() })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+            setEditingTeamId(null);
+            setEditingTeamName("");
+            await loadTeams();
+            if (selectedApplication) await loadApplicationDetail(selectedApplication.id);
+            await loadApplications();
         } catch (err) {
             setError(err.message);
         }
@@ -496,7 +548,25 @@ function SDLCMaturityTracker() {
                                     return (
                                         <div key={app.id} className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700 hover:border-cyan-500/50 transition">
                                             <div className="flex justify-between items-start mb-2">
-                                                <h3 className="text-lg font-semibold text-slate-200">{app.name}</h3>
+                                                {editingAppId === app.id ? (
+                                                    <div className="flex items-center gap-2 flex-1">
+                                                        <input
+                                                            type="text"
+                                                            value={editingAppName}
+                                                            onChange={e => setEditingAppName(e.target.value)}
+                                                            onKeyPress={e => e.key === 'Enter' && updateApplicationName(app.id, editingAppName)}
+                                                            className="text-lg font-semibold px-2 py-1 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 flex-1"
+                                                            autoFocus
+                                                        />
+                                                        <button onClick={() => updateApplicationName(app.id, editingAppName)} className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs border border-green-500/50 hover:bg-green-500/30">Save</button>
+                                                        <button onClick={() => { setEditingAppId(null); setEditingAppName(""); }} className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 hover:bg-slate-600">Cancel</button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 flex-1">
+                                                        <h3 className="text-lg font-semibold text-slate-200">{app.name}</h3>
+                                                        <button onClick={() => { setEditingAppId(app.id); setEditingAppName(app.name); }} className="text-slate-500 hover:text-cyan-400 text-xs">✎</button>
+                                                    </div>
+                                                )}
                                                 <button onClick={() => deleteApplication(app.id)} className="text-red-400 hover:text-red-300">✕</button>
                                             </div>
                                             <p className="text-xs text-slate-500 mb-2">{app.type}</p>
@@ -523,8 +593,26 @@ function SDLCMaturityTracker() {
                 {view === "applicationDetail" && selectedApplication && (
                     <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
                         <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h2 className="text-2xl font-semibold text-cyan-400">{selectedApplication.name}</h2>
+                            <div className="flex-1">
+                                {editingAppId === selectedApplication.id ? (
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={editingAppName}
+                                            onChange={e => setEditingAppName(e.target.value)}
+                                            onKeyPress={e => e.key === 'Enter' && updateApplicationName(selectedApplication.id, editingAppName)}
+                                            className="text-2xl font-semibold px-3 py-1 bg-slate-700 border border-slate-600 rounded-lg text-cyan-400 flex-1 max-w-md"
+                                            autoFocus
+                                        />
+                                        <button onClick={() => updateApplicationName(selectedApplication.id, editingAppName)} className="px-3 py-1 bg-green-500/20 text-green-400 rounded-lg border border-green-500/50 hover:bg-green-500/30">Save</button>
+                                        <button onClick={() => { setEditingAppId(null); setEditingAppName(""); }} className="px-3 py-1 bg-slate-700 text-slate-300 rounded-lg border border-slate-600 hover:bg-slate-600">Cancel</button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-2xl font-semibold text-cyan-400">{selectedApplication.name}</h2>
+                                        <button onClick={() => { setEditingAppId(selectedApplication.id); setEditingAppName(selectedApplication.name); }} className="text-slate-400 hover:text-cyan-400 text-sm">✎ Edit</button>
+                                    </div>
+                                )}
                                 <p className="text-slate-500">{selectedApplication.type}</p>
                             </div>
                             <button onClick={() => { setView("applications"); setSelectedApplication(null); }} className="text-slate-400 hover:text-slate-200">← Back to applications</button>
@@ -716,7 +804,25 @@ function SDLCMaturityTracker() {
                                 return (
                                     <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-3 border-b border-slate-700 text-slate-200">
                                         <div className="flex-1 min-w-0">
-                                            <span className="font-medium text-slate-200">{t.name}</span>
+                                            {editingTeamId === t.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={editingTeamName}
+                                                        onChange={e => setEditingTeamName(e.target.value)}
+                                                        onKeyPress={e => e.key === 'Enter' && updateTeamName(t.id, editingTeamName)}
+                                                        className="font-medium px-2 py-1 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 flex-1 max-w-xs"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={() => updateTeamName(t.id, editingTeamName)} className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs border border-green-500/50 hover:bg-green-500/30">Save</button>
+                                                    <button onClick={() => { setEditingTeamId(null); setEditingTeamName(""); }} className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 hover:bg-slate-600">Cancel</button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-slate-200">{t.name}</span>
+                                                    <button onClick={() => { setEditingTeamId(t.id); setEditingTeamName(t.name); }} className="text-slate-500 hover:text-cyan-400 text-xs">✎</button>
+                                                </div>
+                                            )}
                                             {linkedApps.length > 0 ? (
                                                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                                                     <span className="text-slate-500 text-sm">Linked applications:</span>
@@ -748,7 +854,7 @@ function SDLCMaturityTracker() {
                                 <li className="flex gap-3">
                                     <span className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-500/30 text-cyan-400 font-semibold flex items-center justify-center text-sm">1</span>
                                     <div>
-                                        <strong className="text-slate-200">Applications</strong> — Add each application you want to track. Give it a name, optional description, and type (Custom, SaaS, COTS). You can edit or remove applications later.
+                                        <strong className="text-slate-200">Applications</strong> — Add each application you want to track. Give it a name, optional description, and type (Custom, SaaS, COTS). Click the ✎ icon next to an application name to edit it. You can edit or remove applications later.
                                     </div>
                                 </li>
                                 <li className="flex gap-3">
@@ -787,7 +893,7 @@ function SDLCMaturityTracker() {
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/applications</code> — List all applications</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/applications</code> — Create (body: <code className="text-slate-400">{"{ name, description?, type }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/applications/:id</code> — Get one application (with teams and assessments)</li>
-                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">PATCH /api/applications/:id</code> — Update</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">PATCH /api/applications/:id</code> — Update (body: <code className="text-slate-400">{"{ name?, description?, type?, externalId?, source?, dimensions? }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">DELETE /api/applications/:id</code> — Delete</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/applications/:id/teams</code> — Link team (body: <code className="text-slate-400">{"{ teamId }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">DELETE /api/applications/:id/teams/:teamId</code> — Unlink team</li>
@@ -800,6 +906,7 @@ function SDLCMaturityTracker() {
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/teams</code> — List all teams</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/teams</code> — Create (body: <code className="text-slate-400">{"{ name }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/teams/:id</code> — Get one team</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">PATCH /api/teams/:id</code> — Update (body: <code className="text-slate-400">{"{ name?, externalId? }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">DELETE /api/teams/:id</code> — Delete (unlinks from all applications)</li>
                                     </ul>
                                 </div>

@@ -118,6 +118,100 @@ describe('applicationService', () => {
     });
   });
 
+  describe('update', () => {
+    it('updates application name successfully', async () => {
+      vi.mocked(repo.findById).mockResolvedValue({
+        id: 'app-1',
+        name: 'Old Name',
+        description: null,
+        type: ApplicationType.Custom,
+        externalId: null,
+        source: ApplicationSource.manual,
+        dimensions: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        teams: [],
+        assessments: [],
+      } as never);
+      vi.mocked(repo.update).mockResolvedValue({
+        id: 'app-1',
+        name: 'New Name',
+        description: null,
+        type: ApplicationType.Custom,
+        externalId: null,
+        source: ApplicationSource.manual,
+        dimensions: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+
+      const result = await applicationService.update('app-1', { name: 'New Name' });
+
+      expect(result.name).toBe('New Name');
+      expect(repo.findById).toHaveBeenCalledWith('app-1');
+      expect(repo.update).toHaveBeenCalledWith('app-1', { name: 'New Name' });
+    });
+
+    it('throws when application not found', async () => {
+      vi.mocked(repo.findById).mockResolvedValue(null);
+
+      await expect(applicationService.update('missing', { name: 'New Name' })).rejects.toThrow(
+        'Application not found'
+      );
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('throws when externalId already exists on another application', async () => {
+      vi.mocked(repo.findById).mockResolvedValue({
+        id: 'app-1',
+        name: 'App',
+        externalId: null,
+        teams: [],
+        assessments: [],
+      } as never);
+      vi.mocked(repo.findByExternalId).mockResolvedValue({
+        id: 'other-app',
+        name: 'Other',
+        externalId: 'ext-1',
+        teams: [],
+        assessments: [],
+      } as never);
+
+      await expect(
+        applicationService.update('app-1', { externalId: 'ext-1' })
+      ).rejects.toThrow(/already exists/);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('allows updating externalId to same value', async () => {
+      vi.mocked(repo.findById).mockResolvedValue({
+        id: 'app-1',
+        name: 'App',
+        externalId: 'ext-1',
+        teams: [],
+        assessments: [],
+      } as never);
+      vi.mocked(repo.findByExternalId).mockResolvedValue({
+        id: 'app-1',
+        name: 'App',
+        externalId: 'ext-1',
+        teams: [],
+        assessments: [],
+      } as never);
+      vi.mocked(repo.update).mockResolvedValue({
+        id: 'app-1',
+        name: 'App',
+        externalId: 'ext-1',
+        teams: [],
+        assessments: [],
+      } as never);
+
+      await applicationService.update('app-1', { externalId: 'ext-1' });
+
+      expect(repo.update).toHaveBeenCalled();
+    });
+  });
+
   describe('addTeamToApplication', () => {
     it('adds team when application and team exist and team is not already linked', async () => {
       vi.mocked(repo.findById).mockResolvedValue({

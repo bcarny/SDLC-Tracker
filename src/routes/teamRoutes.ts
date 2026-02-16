@@ -10,6 +10,8 @@ const createTeamSchema = z.object({
   externalId: z.string().max(255).optional().nullable(),
 });
 
+const updateTeamSchema = createTeamSchema.partial();
+
 teamRoutes.get('/', async (_req, res) => {
   try {
     const teams = await teamService.list();
@@ -37,6 +39,18 @@ teamRoutes.post('/', async (req, res) => {
     res.status(201).json(team);
   } catch (e) {
     return handleServiceError(e, res);
+  }
+});
+
+teamRoutes.patch('/:id', async (req, res) => {
+  const parsed = updateTeamSchema.safeParse(req.body);
+  if (!parsed.success) return handleValidationError(parsed.error, res);
+  
+  try {
+    const team = await teamService.update(req.params.id, parsed.data);
+    res.json(team);
+  } catch (e) {
+    return handleServiceError(e, res, ['Team not found']);
   }
 });
 

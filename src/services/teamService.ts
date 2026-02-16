@@ -1,4 +1,4 @@
-import type { CreateTeamInput } from '../repositories/teamRepository.js';
+import type { CreateTeamInput, UpdateTeamInput } from '../repositories/teamRepository.js';
 import { teamRepository } from '../repositories/teamRepository.js';
 
 export const teamService = {
@@ -14,6 +14,11 @@ export const teamService = {
     const team = await teamRepository.findById(id);
     if (!team) throw new Error('Team not found');
     return team;
+  },
+
+  async update(id: string, data: UpdateTeamInput) {
+    await this.getById(id);
+    return teamRepository.update(id, data);
   },
 
   async delete(id: string) {

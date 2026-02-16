@@ -2,7 +2,7 @@
 
 **Navigating the wild landscape of our software lifecycle.**
 
-AppCompass is an FFIEC-aligned SDLC maturity tracker with an **application-first** workflow. Applications are the primary entity; you link teams to applications and assess maturity at the **application level**. Application and team maturity are correlated, but not all applications can reach the same maturity (e.g. SaaS/COTS have limited control). Supports manual entry, ServiceNow CMDB/APM sync (planned), comparison across applications and teams, and export to Power BI and ServiceNow.
+AppCompass captures existing SDLC maturity across your organization's application landscape using FFIEC-aligned criteria, enabling you to build data-driven roadmaps for improvement. With an **application-first** workflow, you assess maturity at the application level and link teams to applications, recognizing that not all applications can reach the same maturity level (e.g., SaaS/COTS have limited control). Track maturity over time, compare across applications and teams, and export data for integration with ServiceNow, Power BI, and other tools.
 
 ## User Interface
 
@@ -21,10 +21,10 @@ AppCompass provides an intuitive interface for tracking application maturity acr
 *Requirements & Planning, Design & Architecture categories*
 
 ![Assessment Form - Part 2](docs/images/assessment-form2.png)
-*Development & Code Quality, Testing & Quality Assurance categories*
+*Development & Code Quality (including AI Coding Assistants & Agentic Development), Testing & Quality Assurance categories*
 
 ![Assessment Form - Part 3](docs/images/assessment-form3.png)
-*Security & Compliance, Deployment & Release, Operations & Monitoring, Governance & Documentation categories*
+*Security & Compliance, Deployment & Release, Operations & Monitoring, Governance & Documentation categories. Includes AI Coding Assistants & Agentic Development criterion.*
 
 ### Comparison View
 ![Comparison - Radar Chart](docs/images/comparison-view1.png)
@@ -87,10 +87,10 @@ npm run dev
 - **App (frontend):** http://localhost:3000  
 - **Health:** http://localhost:3000/health  
 - **API:** http://localhost:3000/api  
-  - Applications: `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id`  
+  - Applications: `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id` (PATCH body: `{ name?, description?, type?, externalId?, source?, dimensions? }`)  
   - Link teams: `POST /api/applications/:id/teams` (body: `{ teamId }`), `DELETE /api/applications/:id/teams/:teamId`  
   - Assessments: `GET /api/applications/:id/assessments` (all assessments for history), `POST /api/assessments` (body: `{ applicationId, teamId?, scores }`)  
-  - Teams: `GET/POST /api/teams`, `GET/DELETE /api/teams/:id` (delete removes the team and unlinks from applications)
+  - Teams: `GET/POST /api/teams`, `GET/PATCH/DELETE /api/teams/:id` (PATCH body: `{ name?, externalId? }`; delete removes the team and unlinks from applications)
 
 ## Scripts
 
