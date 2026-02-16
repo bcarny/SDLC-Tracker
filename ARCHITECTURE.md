@@ -23,7 +23,17 @@ src/
 │   ├── applicationRepository.ts  # addTeam, removeTeam; list includes assessments
 │   ├── teamRepository.ts
 │   └── assessmentRepository.ts   # listByApplication, create
-└── integrations/         # (Future) ServiceNow, Power BI clients – one entry per system
+└── integrations/         # ServiceNow, PowerBI clients – one entry per system
+    ├── servicenow/
+    │   ├── servicenowClient.ts      # REST API client
+    │   ├── servicenowSyncService.ts # Sync logic (import/export)
+    │   ├── servicenowMapper.ts      # Map ServiceNow ↔ AppCompass models
+    │   └── servicenowRoutes.ts      # API endpoints
+    └── powerbi/
+        ├── powerbiClient.ts         # REST API client with OAuth
+        ├── powerbiExportService.ts  # Data transformation and export
+        ├── powerbiMapper.ts         # Map AppCompass data to PowerBI schema
+        └── powerbiRoutes.ts         # API endpoints
 ```
 
 ## Data flow

@@ -916,6 +916,23 @@ function SDLCMaturityTracker() {
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/assessments</code> — Create/update assessment (body: <code className="text-slate-400">{"{ applicationId, scores }"}</code>; omit <code className="text-slate-400">teamId</code> for application-level)</li>
                                     </ul>
                                 </div>
+                                <div>
+                                    <h3 className="text-lg font-medium text-slate-200 mb-2">ServiceNow Integration</h3>
+                                    <ul className="text-sm text-slate-300 space-y-1.5">
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/integrations/servicenow/sync</code> — Sync applications from ServiceNow CMDB (body: <code className="text-slate-400">{"{ tableName?, query?, preserveManualEdits? }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/integrations/servicenow/sync/teams</code> — Sync teams from ServiceNow (body: <code className="text-slate-400">{"{ tableName?, query? }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/integrations/servicenow/sync/assessment</code> — Export assessment to ServiceNow (body: <code className="text-slate-400">{"{ applicationId, tableName? }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/integrations/servicenow/status</code> — Check ServiceNow connection status</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-medium text-slate-200 mb-2">PowerBI Integration</h3>
+                                    <ul className="text-sm text-slate-300 space-y-1.5">
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/integrations/powerbi/export</code> — Export data to PowerBI (body: <code className="text-slate-400">{"{ clearExisting?, datasetName? }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/integrations/powerbi/status</code> — Check PowerBI connection status</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/integrations/powerbi/datasets</code> — List available PowerBI datasets</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     </div>

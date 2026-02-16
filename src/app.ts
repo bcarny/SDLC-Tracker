@@ -5,6 +5,8 @@ import { healthRoutes } from './routes/healthRoutes.js';
 import { applicationRoutes } from './routes/applicationRoutes.js';
 import { teamRoutes } from './routes/teamRoutes.js';
 import { assessmentRoutes } from './routes/assessmentRoutes.js';
+import { servicenowRoutes } from './integrations/servicenow/servicenowRoutes.js';
+import { powerbiRoutes } from './integrations/powerbi/powerbiRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +24,8 @@ export function createApp() {
   app.use('/api/applications', applicationRoutes);
   app.use('/api/teams', teamRoutes);
   app.use('/api/assessments', assessmentRoutes);
+  app.use('/api/integrations/servicenow', servicenowRoutes);
+  app.use('/api/integrations/powerbi', powerbiRoutes);
 
   app.get('/api', (_req, res) => {
     res.json({
