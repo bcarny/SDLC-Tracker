@@ -43,11 +43,10 @@ export const applicationService = {
   },
 
   async addTeamToApplication(applicationId: string, teamId: string, role?: TeamRole) {
-    await this.getById(applicationId);
+    const app = await this.getById(applicationId);
     const team = await teamRepository.findById(teamId);
     if (!team) throw new Error('Team not found');
-    const app = await applicationRepository.findById(applicationId);
-    const alreadyLinked = app?.teams.some((at) => at.teamId === teamId);
+    const alreadyLinked = app.teams?.some((at) => at.teamId === teamId);
     if (alreadyLinked) throw new Error('Team is already linked to this application');
     return applicationRepository.addTeam(applicationId, teamId, role ?? 'supporting');
   },

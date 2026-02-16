@@ -1,6 +1,47 @@
-# SDLC Maturity Tracker
+# AppCompass
 
-FFIEC-aligned SDLC maturity tracker with an **application-first** workflow. Applications are the primary entity; you link teams to applications and assess maturity at the **application level** and/or **per team**. Application and team maturity are correlated, but not all applications can reach the same maturity (e.g. SaaS/COTS have limited control). Supports manual entry, ServiceNow CMDB/APM sync (planned), comparison across applications and teams, and export to Power BI and ServiceNow.
+**Navigating the wild landscape of our software lifecycle.**
+
+AppCompass is an FFIEC-aligned SDLC maturity tracker with an **application-first** workflow. Applications are the primary entity; you link teams to applications and assess maturity at the **application level**. Application and team maturity are correlated, but not all applications can reach the same maturity (e.g. SaaS/COTS have limited control). Supports manual entry, ServiceNow CMDB/APM sync (planned), comparison across applications and teams, and export to Power BI and ServiceNow.
+
+## User Interface
+
+AppCompass provides an intuitive interface for tracking application maturity across your organization. Here are the key views:
+
+### Main Dashboard
+![Applications View](docs/images/home-applications.png)
+*Overview of all applications with maturity scores and quick access to assessments*
+
+### Application Detail
+![Application Detail](docs/images/application-detail.png)
+*View application details, linked teams, and run maturity assessments*
+
+### Maturity Assessment
+![Assessment Form - Part 1](docs/images/assessment-form1.png)
+*Requirements & Planning, Design & Architecture categories*
+
+![Assessment Form - Part 2](docs/images/assessment-form2.png)
+*Development & Code Quality, Testing & Quality Assurance categories*
+
+![Assessment Form - Part 3](docs/images/assessment-form3.png)
+*Security & Compliance, Deployment & Release, Operations & Monitoring, Governance & Documentation categories*
+
+### Comparison View
+![Comparison - Radar Chart](docs/images/comparison-view1.png)
+*Radar chart comparing maturity across multiple applications*
+
+![Comparison - Score Table](docs/images/comparison-view2.png)
+*Detailed comparison table with maturity scores and levels*
+
+### Teams Management
+![Teams](docs/images/teams-view.png)
+*Manage teams and see which applications they maintain*
+
+### Documentation
+![Documentation](docs/images/docs-view.png)
+*User guide and API reference for integrations*
+
+> **Note:** Screenshots will be added to `docs/images/` directory. See [SCREENSHOTS.md](docs/SCREENSHOTS.md) for capture guidelines.
 
 ## Prerequisites
 
@@ -78,4 +119,5 @@ No code changes needed; ensure all secrets are in Railway project variables.
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) – Module layout and where to change what.
+- [SCREENSHOTS.md](docs/SCREENSHOTS.md) – Guidelines for capturing UI screenshots.
 - FFIEC alignment: [Development, Acquisition, and Maintenance](https://ithandbook.ffiec.gov/it-booklets/development-acquisition-and-maintenance/).

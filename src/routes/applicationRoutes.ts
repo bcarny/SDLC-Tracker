@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { applicationService } from '../services/applicationService.js';
 import { assessmentService } from '../services/assessmentService.js';
 import { ApplicationSource, ApplicationType, TeamRole } from '@prisma/client';
+import { handleServiceError, handleValidationError } from '../utils/routeHelpers.js';
 
 export const applicationRoutes = Router();
 
@@ -40,20 +41,14 @@ applicationRoutes.get('/:id/assessments', async (req, res) => {
     const assessments = await assessmentService.getAssessmentsForApplication(req.params.id);
     res.json(assessments);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Not found';
-    res.status(404).json({ error: msg });
+    return handleServiceError(e, res, ['Application not found']);
   }
 });
 
 applicationRoutes.post('/:id/teams', async (req, res) => {
   const parsed = addTeamSchema.safeParse(req.body);
-  if (!parsed.success) {
-    const details = parsed.error.flatten();
-    return res.status(400).json({
-      error: 'Validation failed',
-      details: details.fieldErrors as Record<string, string[]>,
-    });
-  }
+  if (!parsed.success) return handleValidationError(parsed.error, res);
+  
   const applicationId = req.params.id?.trim();
   const teamId = parsed.data.teamId?.trim();
   if (!applicationId || !teamId) {
@@ -68,15 +63,12 @@ applicationRoutes.post('/:id/teams', async (req, res) => {
     res.status(201).json(link);
   } catch (e) {
     const msg = (e as Error).message;
-    if (msg === 'Application not found' || msg === 'Team not found') {
-      return res.status(404).json({ error: msg });
-    }
     if (msg.includes('expected pattern') || msg.includes('Invalid')) {
       return res.status(400).json({
         error: 'Invalid application or team. Try going back to Applications, opening this app again, then link the team.',
       });
     }
-    res.status(400).json({ error: msg });
+    return handleServiceError(e, res, ['Application not found', 'Team not found']);
   }
 });
 
@@ -85,8 +77,7 @@ applicationRoutes.delete('/:id/teams/:teamId', async (req, res) => {
     await applicationService.removeTeamFromApplication(req.params.id, req.params.teamId);
     res.status(204).send();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error';
-    res.status(msg === 'Application not found' ? 404 : 400).json({ error: msg });
+    return handleServiceError(e, res, ['Application not found']);
   }
 });
 
@@ -95,38 +86,32 @@ applicationRoutes.get('/:id', async (req, res) => {
     const app = await applicationService.getById(req.params.id);
     res.json(app);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Not found';
-    res.status(404).json({ error: msg });
+    return handleServiceError(e, res, ['Application not found']);
   }
 });
 
 applicationRoutes.post('/', async (req, res) => {
   const parsed = createApplicationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
-  }
+  if (!parsed.success) return handleValidationError(parsed.error, res);
+  
   try {
     const data = { ...parsed.data, source: parsed.data.source ?? 'manual' };
     const app = await applicationService.create(data);
     res.status(201).json(app);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error creating application';
-    res.status(400).json({ error: msg });
+    return handleServiceError(e, res);
   }
 });
 
 applicationRoutes.patch('/:id', async (req, res) => {
   const parsed = updateApplicationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
-  }
+  if (!parsed.success) return handleValidationError(parsed.error, res);
+  
   try {
     const app = await applicationService.update(req.params.id, parsed.data);
     res.json(app);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error updating application';
-    if (msg === 'Application not found') return res.status(404).json({ error: msg });
-    res.status(400).json({ error: msg });
+    return handleServiceError(e, res, ['Application not found']);
   }
 });
 
@@ -135,8 +120,6 @@ applicationRoutes.delete('/:id', async (req, res) => {
     await applicationService.delete(req.params.id);
     res.status(204).send();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error deleting application';
-    if (msg === 'Application not found') return res.status(404).json({ error: msg });
-    res.status(400).json({ error: msg });
+    return handleServiceError(e, res, ['Application not found']);
   }
 });

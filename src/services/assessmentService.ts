@@ -14,14 +14,10 @@ export const assessmentService = {
     teamId?: string | null
   ) {
     const app = await applicationRepository.findById(applicationId);
-    if (!app) {
-      throw new Error('Application not found');
-    }
+    if (!app) throw new Error('Application not found');
     if (teamId != null) {
       const linked = app.teams?.some((at) => at.teamId === teamId);
-      if (!linked) {
-        throw new Error('Team is not linked to this application');
-      }
+      if (!linked) throw new Error('Team is not linked to this application');
     }
     return assessmentRepository.create({
       applicationId,

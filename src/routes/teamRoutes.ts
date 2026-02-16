@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { teamService } from '../services/teamService.js';
+import { handleServiceError, handleValidationError } from '../utils/routeHelpers.js';
 
 export const teamRoutes = Router();
 
@@ -14,7 +15,7 @@ teamRoutes.get('/', async (_req, res) => {
     const teams = await teamService.list();
     res.json(teams);
   } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
+    return handleServiceError(e, res);
   }
 });
 
@@ -23,21 +24,19 @@ teamRoutes.get('/:id', async (req, res) => {
     const team = await teamService.getById(req.params.id);
     res.json(team);
   } catch (e) {
-    const msg = (e as Error).message;
-    res.status(msg === 'Team not found' ? 404 : 500).json({ error: msg });
+    return handleServiceError(e, res, ['Team not found']);
   }
 });
 
 teamRoutes.post('/', async (req, res) => {
   const parsed = createTeamSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
-  }
+  if (!parsed.success) return handleValidationError(parsed.error, res);
+  
   try {
     const team = await teamService.create(parsed.data);
     res.status(201).json(team);
   } catch (e) {
-    res.status(400).json({ error: (e as Error).message });
+    return handleServiceError(e, res);
   }
 });
 
@@ -46,7 +45,6 @@ teamRoutes.delete('/:id', async (req, res) => {
     await teamService.delete(req.params.id);
     res.status(204).send();
   } catch (e) {
-    const msg = (e as Error).message;
-    res.status(msg === 'Team not found' ? 404 : 500).json({ error: msg });
+    return handleServiceError(e, res, ['Team not found']);
   }
 });
