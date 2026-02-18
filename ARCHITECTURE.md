@@ -11,18 +11,21 @@ src/
 │   └── db.ts             # Prisma client singleton
 ├── routes/
 │   ├── healthRoutes.ts
-│   ├── applicationRoutes.ts   # apps + :id/teams, :id/assessments
+│   ├── organizationRoutes.ts     # CRUD organizations
+│   ├── applicationRoutes.ts     # apps + :id/teams, :id/assessments; list by organizationId
 │   ├── teamRoutes.ts
-│   └── assessmentRoutes.ts    # POST / (applicationId, teamId?, scores)
+│   └── assessmentRoutes.ts       # POST / (applicationId, teamId?, scores)
 ├── services/
 │   ├── healthService.ts
-│   ├── applicationService.ts  # addTeamToApplication, removeTeamFromApplication
+│   ├── organizationService.ts   # list, getById, create, update, delete
+│   ├── applicationService.ts    # addTeamToApplication, removeTeamFromApplication; requires organizationId
 │   ├── teamService.ts
-│   └── assessmentService.ts  # getAssessmentsForApplication, saveAssessment
+│   └── assessmentService.ts     # getAssessmentsForApplication, saveAssessment
 ├── repositories/
-│   ├── applicationRepository.ts  # addTeam, removeTeam; list includes assessments
+│   ├── organizationRepository.ts # CRUD; findFirst (used by ServiceNow sync)
+│   ├── applicationRepository.ts # addTeam, removeTeam; list by organizationId; includes organization
 │   ├── teamRepository.ts
-│   └── assessmentRepository.ts   # listByApplication, create
+│   └── assessmentRepository.ts  # listByApplication, create
 └── integrations/         # ServiceNow, PowerBI clients – one entry per system
     ├── servicenow/
     │   ├── servicenowClient.ts      # REST API client
@@ -41,7 +44,7 @@ src/
 - **Request** → route (validation) → service → repository → Prisma → DB
 - **Response** ← route ← service ← repository
 
-**Application-first model:** Applications are the primary entity. Teams are linked to applications (many-to-many). Assessments belong to an application and optionally to a team (application-level vs team-level). Not all applications can reach the same maturity (e.g. SaaS, COTS); the UI supports assessing at both application and team scope.
+**Organization-first entry:** The UI entry point is selecting an organization; all main views (Applications, Comparison, Teams) are then scoped to that organization. Organizations contain applications and (optionally) teams. Applications are the primary entity within an org; each application has a required `organizationId`. Teams are linked to applications (many-to-many) and may be associated with an organization. Assessments belong to an application and optionally to a team (application-level vs team-level). Not all applications can reach the same maturity (e.g. SaaS, COTS); the UI supports assessing at both application and team scope. ServiceNow sync requires at least one organization (new apps are assigned to the first org).
 
 ## Where to change what
 

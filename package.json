@@ -24,8 +24,12 @@
   "engines": {
     "node": ">=18"
   },
+  "overrides": {
+    "tmp": "^0.2.4",
+    "hono": "^4.11.7"
+  },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^6.19.2",
     "dotenv": "^16.6.1",
     "express": "^4.21.0",
     "zod": "^3.23.8"
@@ -35,9 +39,9 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.9.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "eslint": "^9.14.0",
+    "eslint": "^9.15.0",
     "prettier": "^3.3.3",
-    "prisma": "^5.22.0",
+    "prisma": "^6.19.2",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",

@@ -2,11 +2,14 @@
 
 **Navigating the wild landscape of our software lifecycle.**
 
-AppCompass captures existing SDLC maturity across your organization's application landscape using FFIEC-aligned criteria, enabling you to build data-driven roadmaps for improvement. With an **application-first** workflow, you assess maturity at the application level and link teams to applications, recognizing that not all applications can reach the same maturity level (e.g., SaaS/COTS have limited control). Track maturity over time, compare across applications and teams, and export data for integration with ServiceNow, Power BI, and other tools.
+AppCompass captures existing SDLC maturity across your organization's application landscape using FFIEC-aligned criteria, enabling you to build data-driven roadmaps for improvement. **Organizations** group applications and teams; each application belongs to one organization. The app starts with **organization selection**: you choose (or create) an organization, then view and manage its applications, run assessments, and compare maturity within that context. Use **Switch organization** to change context. Track maturity over time, compare across applications and teams, and export data for integration with ServiceNow, Power BI, and other tools.
 
 ## User Interface
 
 AppCompass provides an intuitive interface for tracking application maturity across your organization. Here are the key views:
+
+### Organization picker (entry)
+When you open the app, you first select an organization from the list (or create one if none exist). **Create, edit, and delete organizations** are done on this entry screen only—management of orgs does not happen inside an existing org. The picker shows a **Create organization** form and a list of org cards (name, application/team counts, **Open**, **Edit**, **Delete**). Click **Open** to work within that organization. Use **Switch organization** in the header to return to the picker and manage orgs or choose another org. The selected organization is reflected in the URL (`?organizationId=...`) so you can bookmark or share a link to a specific org.
 
 ### Main Dashboard
 ![Applications View](docs/images/home-applications.png)
@@ -41,12 +44,18 @@ AppCompass provides an intuitive interface for tracking application maturity acr
 ![Documentation](docs/images/docs-view.png)
 *User guide and API reference for integrations*
 
-> **Note:** Screenshots will be added to `docs/images/` directory. See [SCREENSHOTS.md](docs/SCREENSHOTS.md) for capture guidelines.
-
 ## Prerequisites
 
 - Node.js 18+
 - PostgreSQL (local or Docker)
+
+## npm warnings and vulnerabilities
+
+- **`npm warn Unknown env config "devdir"`** — This comes from your local npm config (or environment), not from this project. You can ignore it or run `npm config delete devdir` to remove it.
+- **`npm audit` reports moderate vulnerabilities** — All reported issues are in **dev-only** dependencies and do not affect production runtime:
+  - **ESLint** (ajv): Used for lint config validation. Fixing would require downgrading ESLint and breaking the tooling.
+  - **Prisma CLI** (hono, lodash): Used only for `prisma generate`, `prisma migrate`, and `prisma studio`. Fixing would require downgrading Prisma and breaking compatibility with `@prisma/client`. Your running app uses only the generated client.
+  Do not run `npm audit fix --force`; it would downgrade ESLint and Prisma and break the project. In a production deploy (`npm install --omit=dev`), only runtime dependencies are installed; the Prisma CLI and ESLint are not, so those advisories do not apply at runtime.
 
 ## Run locally
 
@@ -101,11 +110,12 @@ npm run dev
 - **App (frontend):** http://localhost:3000  
 - **Health:** http://localhost:3000/health  
 - **API:** http://localhost:3000/api  
-  - Applications: `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id` (PATCH body: `{ name?, description?, type?, externalId?, source?, dimensions? }`)  
-  - Link teams: `POST /api/applications/:id/teams` (body: `{ teamId }`), `DELETE /api/applications/:id/teams/:teamId`  
-  - Assessments: `GET /api/applications/:id/assessments` (all assessments for history), `POST /api/assessments` (body: `{ applicationId, teamId?, scores }`)  
-  - Teams: `GET/POST /api/teams`, `GET/PATCH/DELETE /api/teams/:id` (PATCH body: `{ name?, externalId? }`; delete removes the team and unlinks from applications)
-  - **ServiceNow Integration:** `POST /api/integrations/servicenow/sync` (sync applications), `POST /api/integrations/servicenow/sync/teams` (sync teams), `POST /api/integrations/servicenow/sync/assessment` (export assessment), `GET /api/integrations/servicenow/status` (check connection)
+  - **Organizations:** `GET/POST /api/organizations`, `GET/PATCH/DELETE /api/organizations/:id` (POST/PATCH body: `{ name, description? }`). Applications and teams are scoped by organization; create at least one organization before adding applications or syncing from ServiceNow.  
+  - **Applications:** `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id`. List supports `?organizationId=`, `?type=`, `?source=`. POST body: `{ organizationId, name, description?, type, externalId?, source?, dimensions? }`. PATCH body: `{ name?, description?, type?, externalId?, source?, dimensions? }`.  
+  - Link teams: `POST /api/applications/:id/teams` (body: `{ teamId, role? }`), `DELETE /api/applications/:id/teams/:teamId`  
+  - **Assessments:** `GET /api/applications/:id/assessments` (all assessments for history), `POST /api/assessments` (body: `{ applicationId, teamId?, scores }`)  
+  - **Teams:** `GET/POST /api/teams`, `GET/PATCH/DELETE /api/teams/:id` (PATCH body: `{ name?, externalId? }`; delete removes the team and unlinks from applications). Teams may be associated with an organization via `organizationId`.  
+  - **ServiceNow Integration:** `POST /api/integrations/servicenow/sync` (sync applications), `POST /api/integrations/servicenow/sync/teams` (sync teams), `POST /api/integrations/servicenow/sync/assessment` (export assessment), `GET /api/integrations/servicenow/status` (check connection). **Prerequisite:** Create at least one organization; new applications from ServiceNow are assigned to the first organization.  
   - **PowerBI Integration:** `POST /api/integrations/powerbi/export` (export data), `GET /api/integrations/powerbi/status` (check connection), `GET /api/integrations/powerbi/datasets` (list datasets)
 
 ## Scripts
@@ -192,7 +202,7 @@ Export maturity assessment data to PowerBI for visualization and reporting.
 - `GET /api/integrations/powerbi/datasets` - List available PowerBI datasets
 
 **Data Exported:**
-- Applications table: ApplicationId, Name, Type, Description, ExternalId, Source, CreatedAt, UpdatedAt
+- Applications table: ApplicationId, Name, Type, Description, ExternalId, Source, CreatedAt, UpdatedAt (applications are scoped by organization in the API; use `GET /api/applications?organizationId=...` to filter)
 - Assessments table: AssessmentId, ApplicationId, TeamId, AssessmentDate, OverallScore, MaturityLevel, ScoresSnapshot, Status
 - Teams table: TeamId, Name, ExternalId
 - ApplicationTeams table: ApplicationId, TeamId, Role
@@ -205,5 +215,4 @@ Export maturity assessment data to PowerBI for visualization and reporting.
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) – Module layout and where to change what.
-- [SCREENSHOTS.md](docs/SCREENSHOTS.md) – Guidelines for capturing UI screenshots.
 - FFIEC alignment: [Development, Acquisition, and Maintenance](https://ithandbook.ffiec.gov/it-booklets/development-acquisition-and-maintenance/).

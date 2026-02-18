@@ -6,10 +6,12 @@ import type { ServiceNowCI } from './servicenowMapper.js';
 
 vi.mock('./servicenowClient.js');
 vi.mock('../../repositories/applicationRepository.js');
+vi.mock('../../repositories/organizationRepository.js');
 vi.mock('../../repositories/teamRepository.js');
 vi.mock('../../services/applicationService.js');
 
 import * as applicationRepository from '../../repositories/applicationRepository.js';
+import * as organizationRepository from '../../repositories/organizationRepository.js';
 import * as teamRepository from '../../repositories/teamRepository.js';
 import * as applicationService from '../../services/applicationService.js';
 
@@ -30,6 +32,7 @@ describe('ServiceNowSyncService', () => {
     vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockReset();
     vi.mocked(applicationRepository.applicationRepository.create).mockReset();
     vi.mocked(applicationRepository.applicationRepository.update).mockReset();
+    vi.mocked(organizationRepository.organizationRepository.findFirst).mockReset();
   });
 
   describe('syncApplicationsFromServiceNow', () => {
@@ -44,9 +47,17 @@ describe('ServiceNowSyncService', () => {
       ];
 
       vi.mocked(mockClient.getPaginated).mockResolvedValue(cis);
+      vi.mocked(organizationRepository.organizationRepository.findFirst).mockResolvedValue({
+        id: 'org-default',
+        name: 'Default',
+        description: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
       vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(null);
       vi.mocked(applicationRepository.applicationRepository.create).mockResolvedValue({
         id: 'app1',
+        organizationId: 'org-default',
         externalId: 'sn123',
         name: 'ServiceNow App',
         type: ApplicationType.Custom,
@@ -59,6 +70,7 @@ describe('ServiceNowSyncService', () => {
       expect(result.applicationsUpdated).toBe(0);
       expect(applicationRepository.applicationRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
+          organizationId: 'org-default',
           externalId: 'sn123',
           name: 'ServiceNow App',
           source: ApplicationSource.servicenow,

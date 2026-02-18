@@ -1,12 +1,15 @@
 import { ApplicationSource, ApplicationType, TeamRole } from '@prisma/client';
 import type { CreateApplicationInput, UpdateApplicationInput } from '../repositories/applicationRepository.js';
 import { applicationRepository } from '../repositories/applicationRepository.js';
+import { organizationRepository } from '../repositories/organizationRepository.js';
 import { teamRepository } from '../repositories/teamRepository.js';
 
-export type ApplicationFilters = { type?: ApplicationType; source?: ApplicationSource };
+export type ApplicationFilters = { type?: ApplicationType; source?: ApplicationSource; organizationId?: string };
 
 export const applicationService = {
   async create(data: CreateApplicationInput) {
+    const org = await organizationRepository.findById(data.organizationId);
+    if (!org) throw new Error('Organization not found');
     if (data.externalId) {
       const existing = await applicationRepository.findByExternalId(data.externalId);
       if (existing) {

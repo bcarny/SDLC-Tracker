@@ -15,6 +15,11 @@ vi.mock('../repositories/applicationRepository.js', () => ({
     removeTeam: vi.fn(),
   },
 }));
+vi.mock('../repositories/organizationRepository.js', () => ({
+  organizationRepository: {
+    findById: vi.fn(),
+  },
+}));
 vi.mock('../repositories/teamRepository.js', () => ({
   teamRepository: {
     findById: vi.fn(),
@@ -22,13 +27,16 @@ vi.mock('../repositories/teamRepository.js', () => ({
 }));
 
 import * as applicationRepository from '../repositories/applicationRepository.js';
+import * as organizationRepository from '../repositories/organizationRepository.js';
 import * as teamRepository from '../repositories/teamRepository.js';
 
 const repo = applicationRepository.applicationRepository;
+const orgRepo = organizationRepository.organizationRepository;
 const teamRepo = teamRepository.teamRepository;
 
 describe('applicationService', () => {
   beforeEach(() => {
+    vi.mocked(orgRepo.findById).mockReset();
     vi.mocked(repo.findById).mockReset();
     vi.mocked(repo.findByExternalId).mockReset();
     vi.mocked(repo.create).mockReset();
@@ -40,9 +48,11 @@ describe('applicationService', () => {
 
   describe('create', () => {
     it('creates application when externalId is not duplicated', async () => {
+      vi.mocked(orgRepo.findById).mockResolvedValue({ id: 'org-1', name: 'Default', description: null, createdAt: new Date(), updatedAt: new Date() } as never);
       vi.mocked(repo.findByExternalId).mockResolvedValue(null);
       vi.mocked(repo.create).mockResolvedValue({
         id: 'app-1',
+        organizationId: 'org-1',
         name: 'My App',
         description: null,
         type: ApplicationType.Custom,
@@ -51,15 +61,17 @@ describe('applicationService', () => {
         dimensions: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      });
+      } as never);
 
       const result = await applicationService.create({
+        organizationId: 'org-1',
         name: 'My App',
         type: ApplicationType.Custom,
       });
 
       expect(result.name).toBe('My App');
       expect(repo.create).toHaveBeenCalledWith({
+        organizationId: 'org-1',
         name: 'My App',
         type: ApplicationType.Custom,
         description: undefined,
@@ -69,7 +81,18 @@ describe('applicationService', () => {
       });
     });
 
+    it('throws when organization not found', async () => {
+      vi.mocked(orgRepo.findById).mockResolvedValue(null);
+
+      await expect(
+        applicationService.create({ organizationId: 'bad-org', name: 'New', type: ApplicationType.Custom })
+      ).rejects.toThrow('Organization not found');
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
     it('throws when externalId already exists', async () => {
+      vi.mocked(orgRepo.findById).mockResolvedValue({ id: 'org-1', name: 'Default', description: null, createdAt: new Date(), updatedAt: new Date() } as never);
       vi.mocked(repo.findByExternalId).mockResolvedValue({
         id: 'other',
         name: 'Other',
@@ -83,7 +106,7 @@ describe('applicationService', () => {
       } as never);
 
       await expect(
-        applicationService.create({ name: 'New', type: ApplicationType.Custom, externalId: 'ext-1' })
+        applicationService.create({ organizationId: 'org-1', name: 'New', type: ApplicationType.Custom, externalId: 'ext-1' })
       ).rejects.toThrow(/already exists/);
 
       expect(repo.create).not.toHaveBeenCalled();

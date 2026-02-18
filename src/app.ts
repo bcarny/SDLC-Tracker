@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { healthRoutes } from './routes/healthRoutes.js';
+import { organizationRoutes } from './routes/organizationRoutes.js';
 import { applicationRoutes } from './routes/applicationRoutes.js';
 import { teamRoutes } from './routes/teamRoutes.js';
 import { assessmentRoutes } from './routes/assessmentRoutes.js';
@@ -21,6 +22,7 @@ export function createApp() {
   });
 
   app.use(healthRoutes);
+  app.use('/api/organizations', organizationRoutes);
   app.use('/api/applications', applicationRoutes);
   app.use('/api/teams', teamRoutes);
   app.use('/api/assessments', assessmentRoutes);

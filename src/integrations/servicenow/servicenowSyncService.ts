@@ -3,6 +3,7 @@ import { ServiceNowClient } from './servicenowClient.js';
 import type { ServiceNowCI, ServiceNowGroup } from './servicenowMapper.js';
 import { mapServiceNowCIToApplication, mapServiceNowGroupToTeam, extractTeamFromCI } from './servicenowMapper.js';
 import { applicationRepository } from '../../repositories/applicationRepository.js';
+import { organizationRepository } from '../../repositories/organizationRepository.js';
 import { teamRepository } from '../../repositories/teamRepository.js';
 import { applicationService } from '../../services/applicationService.js';
 
@@ -57,9 +58,15 @@ export class ServiceNowSyncService {
             }
             // If preserveManualEdits is true and source is manual, skip update
           } else {
-            // Create new application
+            // Create new application (use default org if none in appData)
+            const defaultOrg = await organizationRepository.findFirst();
+            if (!defaultOrg) {
+              result.errors.push('No organization found. Create an organization first.');
+              continue;
+            }
             await applicationRepository.create({
               ...appData,
+              organizationId: defaultOrg.id,
               source: ApplicationSource.servicenow,
             });
             result.applicationsCreated++;

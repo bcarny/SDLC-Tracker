@@ -8,6 +8,7 @@ import { handleServiceError, handleValidationError } from '../utils/routeHelpers
 export const applicationRoutes = Router();
 
 const createApplicationSchema = z.object({
+  organizationId: z.string().min(1),
   name: z.string().min(1).max(500),
   description: z.string().max(2000).optional().nullable(),
   type: z.nativeEnum(ApplicationType),
@@ -16,11 +17,12 @@ const createApplicationSchema = z.object({
   dimensions: z.string().optional().nullable(),
 });
 
-const updateApplicationSchema = createApplicationSchema.partial();
+const updateApplicationSchema = createApplicationSchema.partial().omit({ organizationId: true });
 
 const listQuerySchema = z.object({
   type: z.nativeEnum(ApplicationType).optional(),
   source: z.nativeEnum(ApplicationSource).optional(),
+  organizationId: z.string().min(1).optional(),
 });
 
 const addTeamSchema = z.object({
@@ -31,8 +33,12 @@ const addTeamSchema = z.object({
 applicationRoutes.get('/', async (req, res) => {
   const query = listQuerySchema.safeParse(req.query);
   const filters = query.success ? query.data : undefined;
-  const apps = await applicationService.list(filters);
-  res.json(apps);
+  try {
+    const apps = await applicationService.list(filters);
+    res.json(apps);
+  } catch (e) {
+    return handleServiceError(e, res);
+  }
 });
 
 applicationRoutes.get('/:id/assessments', async (req, res) => {
@@ -99,7 +105,7 @@ applicationRoutes.post('/', async (req, res) => {
     const app = await applicationService.create(data);
     res.status(201).json(app);
   } catch (e) {
-    return handleServiceError(e, res);
+    return handleServiceError(e, res, ['Organization not found']);
   }
 });
 

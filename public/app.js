@@ -80,6 +80,8 @@ function getCategoryScore(category, scoresSnapshot) {
 }
 
 function SDLCMaturityTracker() {
+    const [organizations, setOrganizations] = useState([]);
+    const [selectedOrganizationId, setSelectedOrganizationId] = useState(null);
     const [applications, setApplications] = useState([]);
     const [teams, setTeams] = useState([]);
     const [selectedApplication, setSelectedApplication] = useState(null);
@@ -97,20 +99,55 @@ function SDLCMaturityTracker() {
     const [editingAppName, setEditingAppName] = useState("");
     const [editingTeamId, setEditingTeamId] = useState(null);
     const [editingTeamName, setEditingTeamName] = useState("");
+    const [assessmentListViewMode, setAssessmentListViewMode] = useState("list"); // "list" | "cards"
+    const [applicationsListViewMode, setApplicationsListViewMode] = useState("list"); // "list" | "cards"
+    const [applicationDetailTab, setApplicationDetailTab] = useState("overview"); // "overview" | "roadmap"
+    const [successMessage, setSuccessMessage] = useState(null);
+    const [newOrgName, setNewOrgName] = useState("");
+    const [editingOrgId, setEditingOrgId] = useState(null);
+    const [editingOrgName, setEditingOrgName] = useState("");
     const chartRef = useRef(null);
     const radarChartRef = useRef(null);
     const historyChartRef = useRef(null);
 
-    const loadApplications = async () => {
+    const loadOrganizations = async () => {
+        try {
+            const res = await fetch(API + '/organizations');
+            if (!res.ok) throw new Error(res.statusText);
+            const data = await res.json();
+            setOrganizations(data);
+        } catch (err) {
+            setOrganizations([]);
+        }
+    };
+
+    const setSelectedOrganizationIdAndUrl = (id) => {
+        setSelectedOrganizationId(id);
+        const params = new URLSearchParams(window.location.search);
+        if (id) {
+            params.set('organizationId', id);
+        } else {
+            params.delete('organizationId');
+        }
+        const newSearch = params.toString();
+        const newUrl = newSearch ? window.location.pathname + '?' + newSearch : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+    };
+
+    const loadApplications = async (organizationId) => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch(API + '/applications');
+            const url = organizationId ? API + '/applications?organizationId=' + encodeURIComponent(organizationId) : API + '/applications';
+            const res = await fetch(url);
             if (!res.ok) throw new Error(res.statusText);
             const data = await res.json();
             setApplications(data);
         } catch (err) {
-            setError(err.message);
+            const errorMsg = err.message === 'Failed to fetch'
+                ? 'Cannot connect to server. Make sure the backend is running on port 3000.'
+                : err.message || 'Load failed';
+            setError(errorMsg);
             setApplications([]);
         } finally {
             setLoading(false);
@@ -128,6 +165,62 @@ function SDLCMaturityTracker() {
         }
     };
 
+    const createOrganization = async (e) => {
+        e.preventDefault();
+        if (!newOrgName.trim()) return;
+        try {
+            const res = await fetch(API + '/organizations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newOrgName.trim() })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+            setNewOrgName("");
+            await loadOrganizations();
+            setSuccessMessage('Organization created.');
+            setTimeout(() => setSuccessMessage(null), 3000);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    const updateOrganization = async (id, name) => {
+        if (!name?.trim()) return;
+        try {
+            const res = await fetch(API + '/organizations/' + id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim() })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+            setEditingOrgId(null);
+            setEditingOrgName("");
+            await loadOrganizations();
+            if (selectedOrganizationId === id) loadApplications(id);
+            setSuccessMessage('Organization updated.');
+            setTimeout(() => setSuccessMessage(null), 3000);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    const deleteOrganization = async (id, name) => {
+        if (!confirm(`Delete organization "${name}"? All applications in it will be removed.`)) return;
+        try {
+            const res = await fetch(API + '/organizations/' + id, { method: 'DELETE' });
+            if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+            if (selectedOrganizationId === id) {
+                setSelectedOrganizationIdAndUrl(organizations.find(o => o.id !== id)?.id || null);
+            }
+            await loadOrganizations();
+            loadApplications(selectedOrganizationId || organizations.find(o => o.id !== id)?.id || null);
+            setSuccessMessage('Organization deleted.');
+            setTimeout(() => setSuccessMessage(null), 3000);
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
     const loadApplicationDetail = async (id) => {
         try {
             const res = await fetch(API + '/applications/' + id);
@@ -140,21 +233,46 @@ function SDLCMaturityTracker() {
         }
     };
 
-    useEffect(() => { loadApplications(); loadTeams(); }, []);
+    useEffect(() => { loadOrganizations(); loadTeams(); }, []);
+
+    useEffect(() => {
+        if (organizations.length === 0) return;
+        const params = new URLSearchParams(window.location.search);
+        const idFromUrl = params.get('organizationId');
+        if (idFromUrl && organizations.some(o => o.id === idFromUrl)) {
+            setSelectedOrganizationId(idFromUrl);
+        } else if (idFromUrl) {
+            params.delete('organizationId');
+            const newSearch = params.toString();
+            window.history.replaceState({}, '', newSearch ? window.location.pathname + '?' + newSearch : window.location.pathname);
+        }
+    }, [organizations]);
+
+    useEffect(() => {
+        const effectiveOrgId = selectedOrganizationId || (organizations.length ? organizations[0].id : null);
+        if (view === 'applications' && effectiveOrgId) loadApplications(effectiveOrgId);
+    }, [view, selectedOrganizationId, organizations]);
 
     const addApplication = async (e) => {
         e.preventDefault();
         if (!newAppName.trim()) return;
+        const orgId = selectedOrganizationId || (organizations.length ? organizations[0].id : null);
+        if (!orgId) {
+            setError('Create an organization first, or select one from the dropdown.');
+            return;
+        }
         try {
             const res = await fetch(API + '/applications', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newAppName.trim(), description: newAppDescription.trim() || null, type: newAppType })
+                body: JSON.stringify({ organizationId: orgId, name: newAppName.trim(), description: newAppDescription.trim() || null, type: newAppType })
             });
             if (!res.ok) throw new Error((await res.json()).error || res.statusText);
             setNewAppName("");
             setNewAppDescription("");
-            await loadApplications();
+            loadApplications(orgId);
+            setSuccessMessage('Application added.');
+            setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
         }
@@ -171,10 +289,12 @@ function SDLCMaturityTracker() {
             if (!res.ok) throw new Error((await res.json()).error || res.statusText);
             setEditingAppId(null);
             setEditingAppName("");
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
             if (selectedApplication?.id === id) {
                 await loadApplicationDetail(id);
             }
+            setSuccessMessage('Application updated.');
+            setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
         }
@@ -185,7 +305,7 @@ function SDLCMaturityTracker() {
             const res = await fetch(API + '/applications/' + id, { method: 'DELETE' });
             if (!res.ok) throw new Error(res.statusText);
             if (selectedApplication?.id === id) { setSelectedApplication(null); setView("applications"); }
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
         } catch (err) {
             setError(err.message);
         }
@@ -221,7 +341,9 @@ function SDLCMaturityTracker() {
             if (!res.ok) throw new Error(errMsg);
             setAddTeamAppId(null);
             await loadApplicationDetail(appId);
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
+            setSuccessMessage('Team linked.');
+            setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
         }
@@ -232,7 +354,7 @@ function SDLCMaturityTracker() {
             const res = await fetch(API + '/applications/' + applicationId + '/teams/' + teamId, { method: 'DELETE' });
             if (!res.ok) throw new Error(res.statusText);
             await loadApplicationDetail(applicationId);
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
         } catch (err) {
             setError(err.message);
         }
@@ -267,7 +389,7 @@ function SDLCMaturityTracker() {
             setEditingTeamName("");
             await loadTeams();
             if (selectedApplication) await loadApplicationDetail(selectedApplication.id);
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
         } catch (err) {
             setError(err.message);
         }
@@ -283,7 +405,7 @@ function SDLCMaturityTracker() {
                 throw new Error(data.error || res.statusText);
             }
             await loadTeams();
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
             if (selectedApplication) await loadApplicationDetail(selectedApplication.id);
         } catch (err) {
             setError(err.message);
@@ -320,13 +442,16 @@ function SDLCMaturityTracker() {
             setView("applicationDetail");
             setAssessmentScope(null);
             if (selectedApplication) await loadApplicationDetail(selectedApplication.id);
-            await loadApplications();
+            loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
+            setSuccessMessage('Assessment saved.');
+            setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
         }
     };
 
     const openApplicationDetail = async (app) => {
+        setApplicationDetailTab("overview");
         setView("applicationDetail");
         setError(null);
         try {
@@ -402,6 +527,40 @@ function SDLCMaturityTracker() {
         a.click();
     };
 
+    const exportToExcel = async () => {
+        const apps = applications.length ? applications : await (await fetch(API + '/applications')).json();
+        const rows = [];
+        for (const app of apps) {
+            const res = await fetch(API + '/applications/' + app.id + '/assessments');
+            const assessments = res.ok ? await res.json() : [];
+            for (const a of assessments) {
+                const scores = a.scoresSnapshot || {};
+                const overall = calculateMaturityScore(scores);
+                const level = getFFIECLevel(overall);
+                const scope = a.teamId ? (teams.find(t => t.id === a.teamId)?.name || a.teamId) : 'Application';
+                rows.push({
+                    Application: app.name,
+                    Type: app.type,
+                    Scope: scope,
+                    'Overall Score': overall,
+                    'Maturity Level': level.name,
+                    'Last Updated': a.updatedAt
+                });
+            }
+            if (assessments.length === 0) {
+                rows.push({ Application: app.name, Type: app.type, Scope: '-', 'Overall Score': '', 'Maturity Level': '', 'Last Updated': '' });
+            }
+        }
+        if (typeof XLSX === 'undefined') {
+            setError('Excel export requires SheetJS. Please refresh the page.');
+            return;
+        }
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Maturity');
+        XLSX.writeFile(wb, 'sdlc-maturity-export-' + new Date().toISOString().split('T')[0] + '.xlsx');
+    };
+
     useEffect(() => {
         if (view !== "comparison" || !applications.length || !chartRef.current) return;
         const ctx = chartRef.current.getContext('2d');
@@ -410,7 +569,7 @@ function SDLCMaturityTracker() {
             const appLevel = app.assessments?.find(a => !a.teamId);
             const score = appLevel ? calculateMaturityScore(appLevel.scoresSnapshot) : 0;
             return { name: app.name, score };
-        }).sort((a, b) => b.score - a.score);
+        }).sort((a, b) => a.score - b.score);
         const colors = ['#22c55e', '#3b82f6', '#eab308', '#f97316', '#ef4444'];
         chartRef.current.chart = new Chart(ctx, {
             type: 'bar',
@@ -459,7 +618,12 @@ function SDLCMaturityTracker() {
         if (radarChartRef.current.chart) radarChartRef.current.chart.destroy();
         const categories = Object.keys(maturityCriteria);
         const colors = ['#3b82f6', '#22c55e', '#eab308'];
-        const datasets = applications.slice(0, 3).map((app, idx) => {
+        const sortedByScore = applications.map(app => {
+            const a = app.assessments?.find(x => !x.teamId);
+            const score = a ? calculateMaturityScore(a.scoresSnapshot || {}) : 0;
+            return { app, score };
+        }).sort((x, y) => x.score - y.score);
+        const datasets = sortedByScore.slice(0, 3).map(({ app }, idx) => {
             const a = app.assessments?.find(x => !x.teamId);
             const scores = a?.scoresSnapshot || {};
             return {
@@ -483,6 +647,7 @@ function SDLCMaturityTracker() {
         const appScore = appAssessment ? calculateMaturityScore(appAssessment.scoresSnapshot) : null;
         if (appScore != null) comparisonRows.push({ app: app.name, scope: 'Application', score: appScore });
     });
+    comparisonRows.sort((a, b) => a.score - b.score);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
@@ -493,29 +658,152 @@ function SDLCMaturityTracker() {
                 </div>
 
                 {error && (
-                    <div className="bg-red-900/30 border border-red-500 rounded-lg p-4 mb-4 text-red-200">{error}</div>
+                    <div className="flex items-center justify-between gap-3 bg-red-900/30 border border-red-500 rounded-lg p-4 mb-4 text-red-200">
+                        <span>{error}</span>
+                        <button onClick={() => setError(null)} className="shrink-0 px-2 py-1 rounded hover:bg-red-500/20 text-red-300" aria-label="Dismiss">×</button>
+                    </div>
+                )}
+                {successMessage && (
+                    <div className="flex items-center justify-between gap-3 bg-emerald-900/30 border border-emerald-500 rounded-lg p-4 mb-4 text-emerald-200">
+                        <span>{successMessage}</span>
+                        <button onClick={() => setSuccessMessage(null)} className="shrink-0 px-2 py-1 rounded hover:bg-emerald-500/20" aria-label="Dismiss">×</button>
+                    </div>
                 )}
 
-                <div className="bg-slate-800 rounded-lg shadow-2xl p-4 mb-6 border border-slate-700">
-                    <div className="flex justify-between items-center flex-wrap gap-2">
-                        <div className="flex gap-2">
-                            <button onClick={() => { setView("applications"); setSelectedApplication(null); }} className={`px-4 py-2 rounded-lg font-medium transition ${view === "applications" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Applications</button>
-                            <button onClick={() => setView("comparison")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "comparison" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Comparison</button>
-                            <button onClick={() => setView("teams")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "teams" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Teams</button>
-                            <button onClick={() => setView("api")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "api" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Docs</button>
+                {!selectedOrganizationId && organizations.length > 0 && (
+                    <div className="space-y-8">
+                        <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
+                            <h2 className="text-xl font-semibold text-cyan-400 mb-4">Create organization</h2>
+                            <p className="text-slate-400 text-sm mb-4">Add a new organization to group applications and teams. Management happens here at the entry—not inside an existing org.</p>
+                            <form onSubmit={createOrganization} className="flex flex-wrap gap-3 items-end">
+                                <label className="flex-1 min-w-[200px]">
+                                    <span className="text-slate-400 text-sm block mb-1">Name</span>
+                                    <input type="text" value={newOrgName} onChange={e => setNewOrgName(e.target.value)} placeholder="e.g. Engineering" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400" />
+                                </label>
+                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg">Add organization</button>
+                            </form>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={exportToCSV} className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-lg hover:from-emerald-600 font-medium shadow-lg">Export CSV</button>
-                            <button onClick={exportToJSON} className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 font-medium shadow-lg">Export JSON</button>
+                        <div className="bg-slate-800 rounded-lg shadow-2xl p-8 border border-slate-700">
+                            <h2 className="text-2xl font-semibold text-cyan-400 mb-2">Select an organization</h2>
+                            <p className="text-slate-400 text-sm mb-6">Choose an organization to view its applications, run assessments, and compare maturity.</p>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {organizations.map(org => (
+                                    <div key={org.id} className="flex flex-col gap-3 p-4 bg-slate-700/50 rounded-lg border border-slate-600 hover:border-cyan-500/50 transition">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                                {editingOrgId === org.id ? (
+                                                    <div className="flex flex-wrap gap-2 items-center">
+                                                        <input type="text" value={editingOrgName} onChange={e => setEditingOrgName(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateOrganization(org.id, editingOrgName)} className="flex-1 min-w-0 px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-slate-200" autoFocus />
+                                                        <button onClick={() => updateOrganization(org.id, editingOrgName)} className="px-3 py-1 bg-green-500/20 text-green-400 rounded border border-green-500/50 text-sm">Save</button>
+                                                        <button onClick={() => { setEditingOrgId(null); setEditingOrgName(""); }} className="px-3 py-1 bg-slate-600 text-slate-300 rounded text-sm">Cancel</button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="font-medium text-slate-200">{org.name}</div>
+                                                        <div className="text-slate-500 text-sm mt-0.5">
+                                                            {(org.applications?.length ?? 0)} application{(org.applications?.length ?? 0) !== 1 ? 's' : ''}
+                                                            {org.teams?.length != null && org.teams.length > 0 ? ` · ${org.teams.length} team${org.teams.length !== 1 ? 's' : ''}` : ''}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                            {editingOrgId !== org.id && (
+                                                <div className="flex gap-1.5 shrink-0">
+                                                    <button onClick={() => { setEditingOrgId(org.id); setEditingOrgName(org.name); }} className="text-slate-400 hover:text-cyan-400 text-sm px-1.5 py-0.5" title="Edit">✎</button>
+                                                    <button onClick={() => deleteOrganization(org.id, org.name)} className="text-red-400 hover:text-red-300 text-sm px-1.5 py-0.5" title="Delete">✕</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => { setSelectedOrganizationIdAndUrl(org.id); setView("applications"); setSelectedApplication(null); }}
+                                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg hover:opacity-90 w-full"
+                                        >
+                                            Open
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
+
+                {!selectedOrganizationId && organizations.length === 0 && (
+                    <div className="space-y-6">
+                        <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
+                            <h2 className="text-xl font-semibold text-cyan-400 mb-4">Get started</h2>
+                            <p className="text-slate-400 mb-6">Create an organization to group your applications and teams, then add applications and run maturity assessments.</p>
+                            <form onSubmit={createOrganization} className="flex flex-wrap gap-3 items-end">
+                                <label className="flex-1 min-w-[200px]">
+                                    <span className="text-slate-400 text-sm block mb-1">Organization name</span>
+                                    <input type="text" value={newOrgName} onChange={e => setNewOrgName(e.target.value)} placeholder="e.g. Engineering" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400" />
+                                </label>
+                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg">Create organization</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {selectedOrganizationId && (
+                    <>
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-4 p-3 bg-slate-800/80 rounded-lg border border-slate-700">
+                            <span className="text-slate-300">
+                                <span className="text-slate-500">Current organization: </span>
+                                <span className="font-medium text-cyan-400">{organizations.find(o => o.id === selectedOrganizationId)?.name ?? '—'}</span>
+                            </span>
+                            <button onClick={() => { setSelectedOrganizationIdAndUrl(null); setView("applications"); setSelectedApplication(null); }} className="px-3 py-1.5 text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 border border-slate-600">Switch organization</button>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg shadow-2xl p-4 mb-6 border border-slate-700">
+                            <div className="flex justify-between items-center flex-wrap gap-2">
+                                <div className="flex gap-2 flex-wrap">
+                                    <button onClick={() => { setView("applications"); setSelectedApplication(null); }} className={`px-4 py-2 rounded-lg font-medium transition ${view === "applications" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Applications</button>
+                                    <button onClick={() => setView("comparison")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "comparison" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Comparison</button>
+                                    <button onClick={() => setView("teams")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "teams" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Teams</button>
+                                    <button onClick={() => setView("api")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "api" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Docs</button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={exportToCSV} className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-lg hover:from-emerald-600 font-medium shadow-lg">Export CSV</button>
+                                    <button onClick={exportToExcel} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg hover:from-teal-600 font-medium shadow-lg">Export Excel</button>
+                                    <button onClick={exportToJSON} className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 font-medium shadow-lg">Export JSON</button>
+                                </div>
+                            </div>
+                        </div>
 
                 {view === "applications" && (
                     <>
+                        <div className="bg-slate-800 rounded-lg shadow-2xl p-4 mb-6 border border-slate-700">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <span className="text-slate-400 text-sm">Organization</span>
+                                <select
+                                    value={selectedOrganizationId || (organizations[0]?.id ?? '')}
+                                    onChange={e => setSelectedOrganizationIdAndUrl(e.target.value || null)}
+                                    className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200"
+                                >
+                                    {organizations.length === 0 ? <option value="">No organizations</option> : null}
+                                    {organizations.map(org => (
+                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                    ))}
+                                </select>
+                                {organizations.length > 0 && (
+                                    <span className="text-slate-500 text-sm">{applications.length} application{applications.length !== 1 ? 's' : ''} in {organizations.find(o => o.id === (selectedOrganizationId || organizations[0]?.id))?.name || 'this org'}</span>
+                                )}
+                            </div>
+                        </div>
                         <div className="bg-slate-800 rounded-lg shadow-2xl p-6 mb-6 border border-slate-700">
                             <h2 className="text-xl font-semibold text-cyan-400 mb-4">Add Application</h2>
                             <form onSubmit={addApplication} className="flex flex-wrap gap-2 items-end">
+                                <label>
+                                    <span className="text-slate-400 text-sm">Organization</span>
+                                    <select
+                                        value={selectedOrganizationId || (organizations[0]?.id ?? '')}
+                                        onChange={e => setSelectedOrganizationIdAndUrl(e.target.value || null)}
+                                        className="block px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 min-w-[160px]"
+                                        disabled={organizations.length === 0}
+                                    >
+                                        {organizations.map(org => (
+                                            <option key={org.id} value={org.id}>{org.name}</option>
+                                        ))}
+                                    </select>
+                                </label>
                                 <label className="flex-1 min-w-[140px]">
                                     <span className="text-slate-400 text-sm">Name</span>
                                     <input type="text" value={newAppName} onChange={e => setNewAppName(e.target.value)} placeholder="Application name" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400" />
@@ -532,66 +820,176 @@ function SDLCMaturityTracker() {
                                         <option value="COTS">COTS</option>
                                     </select>
                                 </label>
-                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg">Add Application</button>
+                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled={organizations.length === 0}>Add application</button>
                             </form>
                         </div>
 
                         {loading ? (
-                            <div className="bg-slate-800 rounded-lg p-12 text-center border border-slate-700 text-slate-400">Loading applications…</div>
+                            <div className="space-y-3">
+                                {[1,2,3].map(i => (
+                                    <div key={i} className="h-24 bg-slate-700/50 rounded-lg border border-slate-600 animate-pulse" />
+                                ))}
+                            </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {applications.map(app => {
-                                    const appAssess = app.assessments?.find(a => !a.teamId);
-                                    const score = appAssess ? calculateMaturityScore(appAssess.scoresSnapshot) : null;
-                                    const level = score != null ? getFFIECLevel(score) : null;
-                                    const teamCount = app.teams?.length || 0;
-                                    return (
-                                        <div key={app.id} className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700 hover:border-cyan-500/50 transition">
-                                            <div className="flex justify-between items-start mb-2">
-                                                {editingAppId === app.id ? (
-                                                    <div className="flex items-center gap-2 flex-1">
-                                                        <input
-                                                            type="text"
-                                                            value={editingAppName}
-                                                            onChange={e => setEditingAppName(e.target.value)}
-                                                            onKeyPress={e => e.key === 'Enter' && updateApplicationName(app.id, editingAppName)}
-                                                            className="text-lg font-semibold px-2 py-1 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 flex-1"
-                                                            autoFocus
-                                                        />
-                                                        <button onClick={() => updateApplicationName(app.id, editingAppName)} className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs border border-green-500/50 hover:bg-green-500/30">Save</button>
-                                                        <button onClick={() => { setEditingAppId(null); setEditingAppName(""); }} className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 hover:bg-slate-600">Cancel</button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2 flex-1">
-                                                        <h3 className="text-lg font-semibold text-slate-200">{app.name}</h3>
-                                                        <button onClick={() => { setEditingAppId(app.id); setEditingAppName(app.name); }} className="text-slate-500 hover:text-cyan-400 text-xs">✎</button>
+                            <>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-sm text-slate-400">View:</span>
+                                    <button
+                                        onClick={() => setApplicationsListViewMode("list")}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${applicationsListViewMode === "list" ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50" : "bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600"}`}
+                                    >
+                                        List
+                                    </button>
+                                    <button
+                                        onClick={() => setApplicationsListViewMode("cards")}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${applicationsListViewMode === "cards" ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50" : "bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600"}`}
+                                    >
+                                        Cards
+                                    </button>
+                                </div>
+                                {(() => {
+                                    const withScore = applications.map(app => {
+                                        const appAssess = app.assessments?.find(a => !a.teamId);
+                                        const score = appAssess ? calculateMaturityScore(appAssess.scoresSnapshot) : 0;
+                                        return { ...app, score };
+                                    });
+                                    const byTeam = {};
+                                    withScore.forEach(app => {
+                                        const teamList = app.teams?.length ? app.teams : [{ team: { name: 'No team' } }];
+                                        teamList.forEach(at => {
+                                            const teamName = at.team?.name || 'No team';
+                                            if (!byTeam[teamName]) byTeam[teamName] = [];
+                                            if (!byTeam[teamName].some(a => a.id === app.id)) byTeam[teamName].push(app);
+                                        });
+                                    });
+                                    const groupOrder = Object.entries(byTeam)
+                                        .map(([teamName, list]) => ({ teamName, minScore: Math.min(...list.map(a => a.score)) }))
+                                        .sort((a, b) => a.minScore - b.minScore)
+                                        .map(x => x.teamName);
+                                    const grouped = groupOrder.map(teamName => ({
+                                        teamName,
+                                        apps: byTeam[teamName].slice().sort((a, b) => a.score - b.score)
+                                    }));
+
+                                    function AppCard({ app }) {
+                                        const level = app.score != null && app.score > 0 ? getFFIECLevel(app.score) : null;
+                                        const teamCount = app.teams?.length || 0;
+                                        return (
+                                            <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700 hover:border-cyan-500/50 transition">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    {editingAppId === app.id ? (
+                                                        <div className="flex items-center gap-2 flex-1">
+                                                            <input
+                                                                type="text"
+                                                                value={editingAppName}
+                                                                onChange={e => setEditingAppName(e.target.value)}
+                                                                onKeyPress={e => e.key === 'Enter' && updateApplicationName(app.id, editingAppName)}
+                                                                className="text-lg font-semibold px-2 py-1 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 flex-1"
+                                                                autoFocus
+                                                            />
+                                                            <button onClick={() => updateApplicationName(app.id, editingAppName)} className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs border border-green-500/50 hover:bg-green-500/30">Save</button>
+                                                            <button onClick={() => { setEditingAppId(null); setEditingAppName(""); }} className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs border border-slate-600 hover:bg-slate-600">Cancel</button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 flex-1">
+                                                            <h3 className="text-lg font-semibold text-slate-200">{app.name}</h3>
+                                                            <button onClick={() => { setEditingAppId(app.id); setEditingAppName(app.name); }} className="text-slate-500 hover:text-cyan-400 text-xs">✎</button>
+                                                        </div>
+                                                    )}
+                                                    <button onClick={() => deleteApplication(app.id)} className="text-red-400 hover:text-red-300">✕</button>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mb-2">{app.type}</p>
+                                                {app.description && <p className="text-sm text-slate-400 mb-3 line-clamp-2">{app.description}</p>}
+                                                <p className="text-xs text-slate-500 mb-3">{teamCount} team(s) linked</p>
+                                                {(app.score != null && app.score > 0) && (
+                                                    <div className="mb-3">
+                                                        <div className="flex justify-between text-sm mb-1"><span className="text-slate-400">Maturity</span><span className="text-cyan-400 font-bold">{app.score}%</span></div>
+                                                        <div className="w-full bg-slate-700 rounded-full h-2"><div className={`h-2 rounded-full ${level.color}`} style={{ width: app.score + '%' }}></div></div>
                                                     </div>
                                                 )}
-                                                <button onClick={() => deleteApplication(app.id)} className="text-red-400 hover:text-red-300">✕</button>
+                                                <button onClick={() => openApplicationDetail(app)} className="w-full px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-cyan-500/20 hover:text-cyan-400 font-medium border border-slate-600">View & assess</button>
                                             </div>
-                                            <p className="text-xs text-slate-500 mb-2">{app.type}</p>
-                                            {app.description && <p className="text-sm text-slate-400 mb-3 line-clamp-2">{app.description}</p>}
-                                            <p className="text-xs text-slate-500 mb-3">{teamCount} team(s) linked</p>
-                                            {score != null && (
-                                                <div className="mb-3">
-                                                    <div className="flex justify-between text-sm mb-1"><span className="text-slate-400">Maturity</span><span className="text-cyan-400 font-bold">{score}%</span></div>
-                                                    <div className="w-full bg-slate-700 rounded-full h-2"><div className={`h-2 rounded-full ${level.color}`} style={{ width: score + '%' }}></div></div>
-                                                </div>
-                                            )}
-                                            <button onClick={() => openApplicationDetail(app)} className="w-full px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-cyan-500/20 hover:text-cyan-400 font-medium border border-slate-600">View & assess</button>
+                                        );
+                                    }
+
+                                    if (applicationsListViewMode === "cards") {
+                                        return (
+                                            <div className="space-y-6">
+                                                {grouped.map(({ teamName, apps }) => (
+                                                    <div key={teamName}>
+                                                        <h3 className="text-lg font-semibold text-cyan-400 mb-3 pb-1 border-b border-slate-600">{teamName}</h3>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {apps.map(app => <AppCard key={app.id} app={app} />)}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="overflow-x-auto border border-slate-700 rounded-lg">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b-2 border-cyan-500 bg-slate-800/80">
+                                                        <th className="text-left py-3 px-4 font-semibold text-cyan-400">Team</th>
+                                                        <th className="text-left py-3 px-4 font-semibold text-cyan-400">Application</th>
+                                                        <th className="text-left py-3 px-4 font-semibold text-cyan-400">Type</th>
+                                                        <th className="text-center py-3 px-4 font-semibold text-cyan-400">Score</th>
+                                                        <th className="text-center py-3 px-4 font-semibold text-cyan-400">Maturity</th>
+                                                        <th className="text-right py-3 px-4 font-semibold text-cyan-400">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {grouped.map(({ teamName, apps }) =>
+                                                        apps.map(app => {
+                                                            const level = app.score > 0 ? getFFIECLevel(app.score) : null;
+                                                            return (
+                                                                <tr key={app.id + teamName} className="border-b border-slate-700 hover:bg-slate-700/30">
+                                                                    <td className="py-3 px-4 text-slate-300">{teamName}</td>
+                                                                    <td className="py-3 px-4 font-medium text-slate-200">{app.name}</td>
+                                                                    <td className="py-3 px-4 text-slate-400">{app.type}</td>
+                                                                    <td className="text-center py-3 px-4"><span className="px-2 py-0.5 rounded text-slate-200 font-medium">{app.score}%</span></td>
+                                                                    <td className="text-center py-3 px-4">{level ? <span className={`px-2 py-0.5 rounded text-xs font-bold text-white ${level.color}`}>{level.name}</span> : <span className="text-slate-500">—</span>}</td>
+                                                                    <td className="text-right py-3 px-4">
+                                                                        <button onClick={() => openApplicationDetail(app)} className="text-cyan-400 hover:text-cyan-300 mr-2">View</button>
+                                                                        <button onClick={() => openApplicationDetail(app)} className="text-emerald-400 hover:text-emerald-300 mr-2">Complete assessment</button>
+                                                                        <button onClick={() => { setEditingAppId(app.id); setEditingAppName(app.name); }} className="text-slate-400 hover:text-cyan-400 mr-2">✎</button>
+                                                                        <button onClick={() => deleteApplication(app.id)} className="text-red-400 hover:text-red-300">✕</button>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     );
-                                })}
-                            </div>
+                                })()}
+                            </>
                         )}
                         {!loading && applications.length === 0 && (
-                            <div className="bg-slate-800 rounded-lg p-12 text-center border border-slate-700 text-slate-400">No applications yet. Add one above.</div>
+                            <div className="bg-slate-800 rounded-xl p-12 text-center border border-slate-600 border-dashed">
+                                <p className="text-slate-400 mb-2">No applications in this organization yet.</p>
+                                <p className="text-slate-500 text-sm">Use the form above to add your first application.</p>
+                            </div>
                         )}
                     </>
                 )}
 
                 {view === "applicationDetail" && selectedApplication && (
                     <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
+                        <nav className="flex items-center gap-2 text-sm text-slate-500 mb-4">
+                            <button onClick={() => { setView("applications"); setSelectedApplication(null); }} className="hover:text-cyan-400">Applications</button>
+                            <span>/</span>
+                            {selectedApplication.organization && (
+                                <>
+                                    <span>{selectedApplication.organization.name}</span>
+                                    <span>/</span>
+                                </>
+                            )}
+                            <span className="text-slate-300">{selectedApplication.name}</span>
+                        </nav>
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex-1">
                                 {editingAppId === selectedApplication.id ? (
@@ -615,10 +1013,27 @@ function SDLCMaturityTracker() {
                                 )}
                                 <p className="text-slate-500">{selectedApplication.type}</p>
                             </div>
-                            <button onClick={() => { setView("applications"); setSelectedApplication(null); }} className="text-slate-400 hover:text-slate-200">← Back to applications</button>
+                            <button onClick={() => { setView("applications"); setSelectedApplication(null); }} className="text-slate-400 hover:text-cyan-400">← Back</button>
                         </div>
                         {selectedApplication.description && <p className="text-slate-300 mb-4">{selectedApplication.description}</p>}
 
+                        <div className="flex gap-2 mb-6">
+                            <button
+                                onClick={() => setApplicationDetailTab("overview")}
+                                className={`px-4 py-2 rounded-lg font-medium transition ${applicationDetailTab === "overview" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}
+                            >
+                                Overview
+                            </button>
+                            <button
+                                onClick={() => setApplicationDetailTab("roadmap")}
+                                className={`px-4 py-2 rounded-lg font-medium transition ${applicationDetailTab === "roadmap" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}
+                            >
+                                Recommended roadmap
+                            </button>
+                        </div>
+
+                        {applicationDetailTab === "overview" && (
+                        <>
                         <h3 className="text-lg font-semibold text-cyan-400 mb-2">Teams responsible for this application</h3>
                         <p className="text-sm text-slate-400 mb-2">Link teams that maintain or support this application.</p>
                         <div className="flex flex-wrap gap-2 mb-4">
@@ -668,47 +1083,222 @@ function SDLCMaturityTracker() {
                         </div>
 
                         <h3 className="text-lg font-semibold text-cyan-400 mb-2 mt-8">Assessment history — maturity over time</h3>
-                        <p className="text-sm text-slate-400 mb-3">All assessments for this application. Run new assessments to see trends.</p>
+                        <p className="text-sm text-slate-400 mb-3">All assessments for this application, grouped by team and sorted by least mature first.</p>
                         {(selectedApplication.assessments || []).length === 0 ? (
                             <p className="text-slate-500 py-2">No assessments yet.</p>
                         ) : (
                             <>
-                                <div className="overflow-x-auto mb-4">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b-2 border-cyan-500">
-                                                <th className="text-left py-2 px-3 font-semibold text-cyan-400">Date</th>
-                                                <th className="text-left py-2 px-3 font-semibold text-cyan-400">Scope</th>
-                                                <th className="text-center py-2 px-3 font-semibold text-cyan-400">Score</th>
-                                                <th className="text-center py-2 px-3 font-semibold text-cyan-400">Maturity level</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(selectedApplication.assessments || [])
-                                                .slice()
-                                                .sort((a, b) => new Date(b.assessmentDate) - new Date(a.assessmentDate))
-                                                .map(a => {
-                                                const score = calculateMaturityScore(a.scoresSnapshot || {});
-                                                const level = getFFIECLevel(score);
-                                                const scope = a.teamId ? (selectedApplication.teams?.find(at => at.teamId === a.teamId)?.team?.name || a.team?.name || 'Team') : 'Application';
-                                                return (
-                                                    <tr key={a.id} className="border-b border-slate-700">
-                                                        <td className="py-2 px-3 text-slate-300">{new Date(a.assessmentDate).toLocaleDateString()}</td>
-                                                        <td className="py-2 px-3 text-slate-300">{scope}</td>
-                                                        <td className="text-center py-2 px-3"><span className="px-2 py-0.5 rounded text-slate-200 font-medium">{score}%</span></td>
-                                                        <td className="text-center py-2 px-3"><span className={`px-2 py-0.5 rounded text-xs font-bold text-white ${level.color}`}>{level.name}</span></td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-sm text-slate-400">View:</span>
+                                    <button
+                                        onClick={() => setAssessmentListViewMode("list")}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${assessmentListViewMode === "list" ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50" : "bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600"}`}
+                                    >
+                                        List
+                                    </button>
+                                    <button
+                                        onClick={() => setAssessmentListViewMode("cards")}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${assessmentListViewMode === "cards" ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50" : "bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600"}`}
+                                    >
+                                        Cards
+                                    </button>
                                 </div>
+                                {(() => {
+                                    const getScope = (a) => a.teamId ? (selectedApplication.teams?.find(at => at.teamId === a.teamId)?.team?.name || a.team?.name || 'Team') : 'Application';
+                                    const withScore = (selectedApplication.assessments || []).map(a => ({
+                                        ...a,
+                                        score: calculateMaturityScore(a.scoresSnapshot || {}),
+                                        scope: getScope(a)
+                                    }));
+                                    const byScope = {};
+                                    withScore.forEach(a => {
+                                        if (!byScope[a.scope]) byScope[a.scope] = [];
+                                        byScope[a.scope].push(a);
+                                    });
+                                    const groupOrder = Object.entries(byScope)
+                                        .map(([scope, list]) => ({ scope, minScore: Math.min(...list.map(x => x.score)) }))
+                                        .sort((a, b) => a.minScore - b.minScore)
+                                        .map(x => x.scope);
+                                    const grouped = groupOrder.map(scope => ({
+                                        scope,
+                                        assessments: byScope[scope].slice().sort((a, b) => a.score - b.score)
+                                    }));
+
+                                    if (assessmentListViewMode === "cards") {
+                                        return (
+                                            <div className="space-y-6 mb-4">
+                                                {grouped.map(({ scope, assessments }) => (
+                                                    <div key={scope}>
+                                                        <h4 className="text-sm font-semibold text-cyan-400 mb-2 pb-1 border-b border-slate-600">{scope}</h4>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                            {assessments.map(a => {
+                                                                const level = getFFIECLevel(a.score);
+                                                                return (
+                                                                    <div key={a.id} className="bg-slate-700/50 rounded-lg border border-slate-600 p-4">
+                                                                        <div className="text-slate-400 text-xs mb-1">{new Date(a.assessmentDate).toLocaleDateString()}</div>
+                                                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                            <span className="px-2 py-0.5 rounded text-slate-200 font-medium">{a.score}%</span>
+                                                                            <span className={`px-2 py-0.5 rounded text-xs font-bold text-white ${level.color}`}>{level.name}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="overflow-x-auto mb-4">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b-2 border-cyan-500">
+                                                        <th className="text-left py-2 px-3 font-semibold text-cyan-400">Scope</th>
+                                                        <th className="text-left py-2 px-3 font-semibold text-cyan-400">Date</th>
+                                                        <th className="text-center py-2 px-3 font-semibold text-cyan-400">Score</th>
+                                                        <th className="text-center py-2 px-3 font-semibold text-cyan-400">Maturity level</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {grouped.map(({ scope, assessments }) => (
+                                                        assessments.map(a => {
+                                                            const level = getFFIECLevel(a.score);
+                                                            return (
+                                                                <tr key={a.id} className="border-b border-slate-700">
+                                                                    <td className="py-2 px-3 text-slate-300 font-medium">{scope}</td>
+                                                                    <td className="py-2 px-3 text-slate-300">{new Date(a.assessmentDate).toLocaleDateString()}</td>
+                                                                    <td className="text-center py-2 px-3"><span className="px-2 py-0.5 rounded text-slate-200 font-medium">{a.score}%</span></td>
+                                                                    <td className="text-center py-2 px-3"><span className={`px-2 py-0.5 rounded text-xs font-bold text-white ${level.color}`}>{level.name}</span></td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
                                 <div className="mt-4">
                                     <h4 className="text-sm font-semibold text-cyan-400 mb-2">Application-level maturity over time</h4>
                                     <div style={{ height: '220px' }}><canvas ref={historyChartRef}></canvas></div>
                                 </div>
                             </>
                         )}
+                        </>
+                        )}
+
+                        {applicationDetailTab === "roadmap" && (() => {
+                            const appLevelAssessments = (selectedApplication.assessments || []).filter(a => !a.teamId).slice().sort((a, b) => new Date(b.assessmentDate) - new Date(a.assessmentDate));
+                            const latest = appLevelAssessments[0];
+                            const previous = appLevelAssessments[1];
+                            const snapshot = latest?.scoresSnapshot || {};
+                            const hasAssessment = latest && Object.keys(snapshot).length > 0;
+
+                            const allCriteria = [];
+                            Object.entries(maturityCriteria).forEach(([category, criteria]) => {
+                                criteria.forEach(c => allCriteria.push({ category, ...c }));
+                            });
+
+                            const trendRows = allCriteria.map(c => {
+                                const latestLevel = snapshot[c.id] ?? null;
+                                const prevSnapshot = previous?.scoresSnapshot || {};
+                                const previousLevel = prevSnapshot[c.id] ?? null;
+                                let trend = "—";
+                                if (previousLevel !== null && latestLevel !== null) {
+                                    if (latestLevel > previousLevel) trend = "progressing";
+                                    else if (latestLevel < previousLevel) trend = "regressing";
+                                    else trend = "stable";
+                                }
+                                return { ...c, latestLevel, previousLevel, trend };
+                            });
+
+                            const steps = allCriteria
+                                .map(c => {
+                                    const current = snapshot[c.id] ?? 0;
+                                    if (current >= 4) return null;
+                                    return {
+                                        criterion: c,
+                                        current,
+                                        nextLevel: current + 1,
+                                        nextDescription: c.levels[current + 1]
+                                    };
+                                })
+                                .filter(Boolean)
+                                .sort((a, b) => a.current - b.current);
+
+                            const regressing = trendRows.filter(r => r.trend === "regressing");
+                            const progressing = trendRows.filter(r => r.trend === "progressing");
+                            const stableHigh = trendRows.filter(r => r.trend === "stable" && (r.latestLevel === 3 || r.latestLevel === 4));
+                            const needsWorkItems = [];
+                            regressing.forEach(r => needsWorkItems.push({ type: "regressing", id: r.id, name: r.name, level: r.latestLevel }));
+                            const nextCaps = steps.filter(s => !regressing.some(r => r.id === s.criterion.id)).slice(0, 5);
+                            nextCaps.forEach(s => needsWorkItems.push({ type: "next", id: s.criterion.id, name: s.criterion.name, next: s.nextDescription }));
+
+                            if (!hasAssessment) {
+                                return (
+                                    <div className="space-y-6">
+                                        <p className="text-slate-400">Complete an assessment to see what needs work and what is going well.</p>
+                                        <button onClick={() => openAssessment(selectedApplication.id, null, null)} className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium">Start assessment</button>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="space-y-6">
+                                    <section className="rounded-lg border border-amber-500/40 bg-amber-950/20 p-5">
+                                        <h3 className="text-base font-semibold text-amber-400 mb-1">Needs work</h3>
+                                        <p className="text-slate-400 text-sm mb-4">Focus here to raise maturity.</p>
+                                        {needsWorkItems.length === 0 ? (
+                                            <p className="text-slate-300 text-sm">Nothing urgent. Consider improving lower-scoring areas below.</p>
+                                        ) : (
+                                            <ul className="space-y-2">
+                                                {needsWorkItems.map((item) => (
+                                                    <li key={item.type === "regressing" ? item.id : "next-" + item.id} className="flex items-start gap-2 text-sm">
+                                                        {item.type === "regressing" ? (
+                                                            <span className="text-red-400 shrink-0" title="Declined since last assessment">↓</span>
+                                                        ) : (
+                                                            <span className="text-amber-400 shrink-0">•</span>
+                                                        )}
+                                                        <span className="text-slate-200">{item.name}</span>
+                                                        {item.type === "regressing" && item.level != null && <span className="text-slate-500">— now Level {item.level}</span>}
+                                                        {item.type === "next" && <span className="text-slate-500">— {item.next}</span>}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </section>
+
+                                    <section className="rounded-lg border border-emerald-500/40 bg-emerald-950/20 p-5">
+                                        <h3 className="text-base font-semibold text-emerald-400 mb-1">Going well</h3>
+                                        <p className="text-slate-400 text-sm mb-4">Improved or already strong.</p>
+                                        {progressing.length === 0 && stableHigh.length === 0 ? (
+                                            <p className="text-slate-300 text-sm">Complete another assessment to see trends. Criteria at level 3–4 are in good shape.</p>
+                                        ) : (
+                                            <ul className="space-y-1.5">
+                                                {progressing.map(r => (
+                                                    <li key={r.id} className="flex items-center gap-2 text-sm text-slate-200">
+                                                        <span className="text-emerald-400" title="Improved">↑</span>
+                                                        {r.name} <span className="text-slate-500">Level {r.previousLevel} → {r.latestLevel}</span>
+                                                    </li>
+                                                ))}
+                                                {stableHigh.map(r => (
+                                                    <li key={r.id} className="flex items-center gap-2 text-sm text-slate-300">
+                                                        <span className="text-slate-500">—</span>
+                                                        {r.name} <span className="text-slate-500">Level {r.latestLevel}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </section>
+
+                                    {steps.length > 5 && (
+                                        <p className="text-slate-500 text-xs">Showing top focus areas. Update your assessment to refresh.</p>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -755,7 +1345,7 @@ function SDLCMaturityTracker() {
                             <div style={{ height: '400px' }}><canvas ref={chartRef}></canvas></div>
                         </div>
                         <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
-                            <h2 className="text-2xl font-semibold text-cyan-400 mb-6">Category breakdown (top 3 applications)</h2>
+                            <h2 className="text-2xl font-semibold text-cyan-400 mb-6">Category breakdown (3 lowest-scoring applications)</h2>
                             <div style={{ height: '400px' }}><canvas ref={radarChartRef}></canvas></div>
                         </div>
                         <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
@@ -854,7 +1444,7 @@ function SDLCMaturityTracker() {
                                 <li className="flex gap-3">
                                     <span className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-500/30 text-cyan-400 font-semibold flex items-center justify-center text-sm">1</span>
                                     <div>
-                                        <strong className="text-slate-200">Applications</strong> — Add each application you want to track. Give it a name, optional description, and type (Custom, SaaS, COTS). Click the ✎ icon next to an application name to edit it. You can edit or remove applications later.
+                                        <strong className="text-slate-200">Select an organization</strong> — When you open the app, choose an organization from the list (or create one if none exist). Then add applications under it (name, optional description, type). Use <strong className="text-cyan-400">Switch organization</strong> to change context. Click the ✎ icon next to an application name to edit it.
                                     </div>
                                 </li>
                                 <li className="flex gap-3">
@@ -878,7 +1468,7 @@ function SDLCMaturityTracker() {
                                 <li className="flex gap-3">
                                     <span className="flex-shrink-0 w-7 h-7 rounded-full bg-cyan-500/30 text-cyan-400 font-semibold flex items-center justify-center text-sm">5</span>
                                     <div>
-                                        <strong className="text-slate-200">Compare and export</strong> — Use <strong className="text-cyan-400">Comparison</strong> to see maturity scores across applications. Use <strong className="text-emerald-400">Export CSV</strong> or <strong className="text-purple-400">Export JSON</strong> to share or integrate with other tools.
+                                        <strong className="text-slate-200">Compare and export</strong> — Use <strong className="text-cyan-400">Comparison</strong> to see maturity scores across applications (sorted worst to best). Use <strong className="text-emerald-400">Export CSV</strong>, <strong className="text-teal-400">Export Excel</strong>, or <strong className="text-purple-400">Export JSON</strong> to share or integrate with other tools.
                                     </div>
                                 </li>
                             </ol>
@@ -888,10 +1478,20 @@ function SDLCMaturityTracker() {
                             <p className="text-slate-400 text-sm mb-4">For integrations and automation. All endpoints are under <code className="bg-slate-700 px-1 rounded text-cyan-300">/api</code>. Use JSON request bodies where noted.</p>
                             <div className="space-y-4">
                                 <div>
+                                    <h3 className="text-lg font-medium text-slate-200 mb-2">Organizations</h3>
+                                    <ul className="text-sm text-slate-300 space-y-1.5">
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/organizations</code> — List all organizations</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/organizations</code> — Create (body: <code className="text-slate-400">{"{ name, description? }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/organizations/:id</code> — Get one organization</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">PATCH /api/organizations/:id</code> — Update (body: <code className="text-slate-400">{"{ name?, description? }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">DELETE /api/organizations/:id</code> — Delete</li>
+                                    </ul>
+                                </div>
+                                <div>
                                     <h3 className="text-lg font-medium text-slate-200 mb-2">Applications</h3>
                                     <ul className="text-sm text-slate-300 space-y-1.5">
-                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/applications</code> — List all applications</li>
-                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/applications</code> — Create (body: <code className="text-slate-400">{"{ name, description?, type }"}</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/applications</code> — List (query: <code className="text-slate-400">organizationId?</code>)</li>
+                                        <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">POST /api/applications</code> — Create (body: <code className="text-slate-400">{"{ organizationId, name, description?, type }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">GET /api/applications/:id</code> — Get one application (with teams and assessments)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">PATCH /api/applications/:id</code> — Update (body: <code className="text-slate-400">{"{ name?, description?, type?, externalId?, source?, dimensions? }"}</code>)</li>
                                         <li><code className="bg-slate-700 px-1.5 py-0.5 rounded">DELETE /api/applications/:id</code> — Delete</li>
@@ -936,6 +1536,8 @@ function SDLCMaturityTracker() {
                             </div>
                         </div>
                     </div>
+                )}
+                    </>
                 )}
             </div>
         </div>

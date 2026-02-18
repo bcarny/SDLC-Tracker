@@ -2,6 +2,7 @@ import { ApplicationSource, ApplicationType, Prisma, TeamRole } from '@prisma/cl
 import { prisma } from '../config/db.js';
 
 export type CreateApplicationInput = {
+  organizationId: string;
   name: string;
   description?: string | null;
   type: ApplicationType;
@@ -21,6 +22,7 @@ export const applicationRepository = {
     return prisma.application.findUnique({
       where: { id },
       include: {
+        organization: true,
         teams: { include: { team: true } },
         assessments: { include: { team: true }, orderBy: { assessmentDate: 'desc' } },
       },
@@ -30,17 +32,19 @@ export const applicationRepository = {
   async findByExternalId(externalId: string) {
     return prisma.application.findUnique({
       where: { externalId },
-      include: { teams: { include: { team: true } } },
+      include: { organization: true, teams: { include: { team: true } } },
     });
   },
 
-  async list(filters?: { type?: ApplicationType; source?: ApplicationSource }) {
+  async list(filters?: { type?: ApplicationType; source?: ApplicationSource; organizationId?: string }) {
     const where: Prisma.ApplicationWhereInput = {};
     if (filters?.type) where.type = filters.type;
     if (filters?.source) where.source = filters.source;
+    if (filters?.organizationId) where.organizationId = filters.organizationId;
     return prisma.application.findMany({
       where,
       include: {
+        organization: true,
         teams: { include: { team: true } },
         assessments: { include: { team: true }, orderBy: { assessmentDate: 'desc' } },
       },

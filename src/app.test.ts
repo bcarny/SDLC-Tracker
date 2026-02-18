@@ -16,6 +16,14 @@ vi.mock('./services/healthService.js', () => ({
   },
 }));
 
+// Mock organizationService so GET /api/organizations and GET /api/organizations/:id work without DB
+vi.mock('./services/organizationService.js', () => ({
+  organizationService: {
+    list: vi.fn(),
+    getById: vi.fn(),
+  },
+}));
+
 // Helper function to simulate HTTP requests without supertest
 function makeRequest(
   app: Express,
@@ -134,5 +142,46 @@ describe('app', () => {
     const res = await makeRequest(app, 'GET', '/api');
     expect(res.status).toBe(200);
     expect((res.body as { name?: string }).name).toBe('SDLC Maturity Tracker');
+  });
+
+  it('GET /api/organizations returns 200 and array', async () => {
+    const { organizationService } = await import('./services/organizationService.js');
+    vi.mocked(organizationService.list).mockResolvedValue([
+      { id: 'org-1', name: 'Test Org', description: null, createdAt: new Date(), updatedAt: new Date() },
+    ] as never);
+
+    const res = await makeRequest(app, 'GET', '/api/organizations');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect((res.body as { id: string; name: string }[]).length).toBe(1);
+    expect((res.body as { id: string; name: string }[])[0].name).toBe('Test Org');
+  });
+
+  it('GET /api/organizations/:id returns 200 when found', async () => {
+    const { organizationService } = await import('./services/organizationService.js');
+    const org = {
+      id: 'org-1',
+      name: 'Test Org',
+      description: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      applications: [],
+      teams: [],
+    };
+    vi.mocked(organizationService.getById).mockResolvedValue(org as never);
+
+    const res = await makeRequest(app, 'GET', '/api/organizations/org-1');
+    expect(res.status).toBe(200);
+    expect((res.body as { id: string; name: string }).id).toBe('org-1');
+    expect((res.body as { id: string; name: string }).name).toBe('Test Org');
+  });
+
+  it('GET /api/organizations/:id returns 404 when not found', async () => {
+    const { organizationService } = await import('./services/organizationService.js');
+    vi.mocked(organizationService.getById).mockRejectedValue(new Error('Organization not found'));
+
+    const res = await makeRequest(app, 'GET', '/api/organizations/missing');
+    expect(res.status).toBe(404);
+    expect((res.body as { error?: string }).error).toBe('Organization not found');
   });
 });
