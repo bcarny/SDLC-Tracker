@@ -6,43 +6,57 @@ AppCompass captures existing SDLC maturity across your organization's applicatio
 
 ## User Interface
 
-AppCompass provides an intuitive interface for tracking application maturity across your organization. Here are the key views:
+AppCompass provides an intuitive interface for tracking application maturity across your organization.
 
 ### Organization picker (entry)
+
 When you open the app, you first select an organization from the list (or create one if none exist). **Create, edit, and delete organizations** are done on this entry screen only—management of orgs does not happen inside an existing org. The picker shows a **Create organization** form and a list of org cards (name, application/team counts, **Open**, **Edit**, **Delete**). Click **Open** to work within that organization. Use **Switch organization** in the header to return to the picker and manage orgs or choose another org. The selected organization is reflected in the URL (`?organizationId=...`) so you can bookmark or share a link to a specific org.
 
-### Main Dashboard
-![Applications View](docs/images/home-applications.png)
-*Overview of all applications with maturity scores and quick access to assessments*
+### App flow
 
-### Application Detail
-![Application Detail](docs/images/application-detail.png)
-*View application details, linked teams, and run maturity assessments*
+```mermaid
+flowchart LR
+    Entry[Organization Picker] --> Main[Main Dashboard]
+    Main --> Applications[Applications]
+    Main --> Comparison[Comparison]
+    Main --> Teams[Teams]
+    Main --> Docs[Docs]
+    Applications --> Detail[Application Detail]
+    Detail --> Assessment[Assessment Form]
+```
 
-### Maturity Assessment
-![Assessment Form - Part 1](docs/images/assessment-form1.png)
-*Requirements & Planning, Design & Architecture categories*
+### Main views
 
-![Assessment Form - Part 2](docs/images/assessment-form2.png)
-*Development & Code Quality (including AI Coding Assistants & Agentic Development), Testing & Quality Assurance categories*
+| View | Description |
+|------|-------------|
+| **Applications** | Overview of all applications with maturity scores, grouped by team. Add applications, filter by type/source, and open assessments. |
+| **Application Detail** | View application details, linked teams, assessment history, and run maturity assessments. |
+| **Maturity Assessment** | FFIEC-aligned form with 17 criteria across 8 categories: Requirements & Planning, Design & Architecture, Development & Code Quality (including AI Coding Assistants & Agentic Development), Testing & Quality Assurance, Security & Compliance, Deployment & Release, Operations & Monitoring, Governance & Documentation. |
+| **Comparison** | Radar chart and score table comparing maturity across applications. |
+| **Teams** | Manage teams and see which applications they maintain. |
+| **Docs** | User guide and API reference for integrations. |
 
-![Assessment Form - Part 3](docs/images/assessment-form3.png)
-*Security & Compliance, Deployment & Release, Operations & Monitoring, Governance & Documentation categories. Includes AI Coding Assistants & Agentic Development criterion.*
+### Global search
 
-### Comparison View
-![Comparison - Radar Chart](docs/images/comparison-view1.png)
-*Radar chart comparing maturity across multiple applications*
+A search bar in the header is visible on all pages. Use it to quickly find and navigate to organizations, applications, and teams.
 
-![Comparison - Score Table](docs/images/comparison-view2.png)
-*Detailed comparison table with maturity scores and levels*
+```mermaid
+flowchart TB
+    Search[Search Bar - Cmd+K] --> API["GET /api/search?q=..."]
+    API --> Results[Results Overlay]
+    Results --> Org[Organizations]
+    Results --> App[Applications]
+    Results --> Team[Teams]
+    Facets[Faceted Filters] --> API
+```
 
-### Teams Management
-![Teams](docs/images/teams-view.png)
-*Manage teams and see which applications they maintain*
+- **Placement:** Header (right-aligned), available when selecting orgs or working inside an org.
+- **Search types:** Faceted, fuzzy (typo-tolerant), and keyword search across organizations, applications, and teams.
+- **Keyboard shortcut:** Cmd+K (Mac) or Ctrl+K (Windows/Linux) to focus the search bar.
+- **Filters:** Entity type (Organization, Application, Team), application type (Custom, SaaS, COTS), source (manual, ServiceNow), and optional "Current org only" when inside an organization.
+- **Results:** Grouped by type; click a result to navigate to that entity.
 
-### Documentation
-![Documentation](docs/images/docs-view.png)
-*User guide and API reference for integrations*
+To add screenshots later, run the app (`npm run dev`), capture views, and save PNGs to `docs/images/`.
 
 ## Prerequisites
 
@@ -111,6 +125,7 @@ npm run dev
 - **Health:** http://localhost:3000/health  
 - **API:** http://localhost:3000/api  
   - **Organizations:** `GET/POST /api/organizations`, `GET/PATCH/DELETE /api/organizations/:id` (POST/PATCH body: `{ name, description? }`). Applications and teams are scoped by organization; create at least one organization before adding applications or syncing from ServiceNow.  
+  - **Search:** `GET /api/search?q=...` – Global search with faceted, fuzzy, and keyword support. Query params: `q` (required), `entityType`, `appType`, `appSource`, `organizationId`.
   - **Applications:** `GET/POST /api/applications`, `GET/PATCH/DELETE /api/applications/:id`. List supports `?organizationId=`, `?type=`, `?source=`. POST body: `{ organizationId, name, description?, type, externalId?, source?, dimensions? }`. PATCH body: `{ name?, description?, type?, externalId?, source?, dimensions? }`.  
   - Link teams: `POST /api/applications/:id/teams` (body: `{ teamId, role? }`), `DELETE /api/applications/:id/teams/:teamId`  
   - **Assessments:** `GET /api/applications/:id/assessments` (all assessments for history), `POST /api/assessments` (body: `{ applicationId, teamId?, scores }`)  
