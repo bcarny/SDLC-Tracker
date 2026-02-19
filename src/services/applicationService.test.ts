@@ -48,7 +48,13 @@ describe('applicationService', () => {
 
   describe('create', () => {
     it('creates application when externalId is not duplicated', async () => {
-      vi.mocked(orgRepo.findById).mockResolvedValue({ id: 'org-1', name: 'Default', description: null, createdAt: new Date(), updatedAt: new Date() } as never);
+      vi.mocked(orgRepo.findById).mockResolvedValue({
+        id: 'org-1',
+        name: 'Default',
+        description: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
       vi.mocked(repo.findByExternalId).mockResolvedValue(null);
       vi.mocked(repo.create).mockResolvedValue({
         id: 'app-1',
@@ -85,14 +91,24 @@ describe('applicationService', () => {
       vi.mocked(orgRepo.findById).mockResolvedValue(null);
 
       await expect(
-        applicationService.create({ organizationId: 'bad-org', name: 'New', type: ApplicationType.Custom })
+        applicationService.create({
+          organizationId: 'bad-org',
+          name: 'New',
+          type: ApplicationType.Custom,
+        })
       ).rejects.toThrow('Organization not found');
 
       expect(repo.create).not.toHaveBeenCalled();
     });
 
     it('throws when externalId already exists', async () => {
-      vi.mocked(orgRepo.findById).mockResolvedValue({ id: 'org-1', name: 'Default', description: null, createdAt: new Date(), updatedAt: new Date() } as never);
+      vi.mocked(orgRepo.findById).mockResolvedValue({
+        id: 'org-1',
+        name: 'Default',
+        description: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
       vi.mocked(repo.findByExternalId).mockResolvedValue({
         id: 'other',
         name: 'Other',
@@ -106,7 +122,12 @@ describe('applicationService', () => {
       } as never);
 
       await expect(
-        applicationService.create({ organizationId: 'org-1', name: 'New', type: ApplicationType.Custom, externalId: 'ext-1' })
+        applicationService.create({
+          organizationId: 'org-1',
+          name: 'New',
+          type: ApplicationType.Custom,
+          externalId: 'ext-1',
+        })
       ).rejects.toThrow(/already exists/);
 
       expect(repo.create).not.toHaveBeenCalled();
@@ -200,9 +221,9 @@ describe('applicationService', () => {
         assessments: [],
       } as never);
 
-      await expect(
-        applicationService.update('app-1', { externalId: 'ext-1' })
-      ).rejects.toThrow(/already exists/);
+      await expect(applicationService.update('app-1', { externalId: 'ext-1' })).rejects.toThrow(
+        /already exists/
+      );
       expect(repo.update).not.toHaveBeenCalled();
     });
 
@@ -244,7 +265,11 @@ describe('applicationService', () => {
         assessments: [],
       } as never);
       vi.mocked(teamRepo.findById).mockResolvedValue({ id: 'team-1', name: 'Team 1' } as never);
-      vi.mocked(repo.addTeam).mockResolvedValue({ applicationId: 'app-1', teamId: 'team-1', team: { name: 'Team 1' } } as never);
+      vi.mocked(repo.addTeam).mockResolvedValue({
+        applicationId: 'app-1',
+        teamId: 'team-1',
+        team: { name: 'Team 1' },
+      } as never);
 
       await applicationService.addTeamToApplication('app-1', 'team-1');
 

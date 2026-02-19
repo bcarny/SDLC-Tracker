@@ -12,8 +12,6 @@ vi.mock('../../services/applicationService.js');
 
 import * as applicationRepository from '../../repositories/applicationRepository.js';
 import * as organizationRepository from '../../repositories/organizationRepository.js';
-import * as teamRepository from '../../repositories/teamRepository.js';
-import * as applicationService from '../../services/applicationService.js';
 
 describe('ServiceNowSyncService', () => {
   let syncService: ServiceNowSyncService;
@@ -54,7 +52,9 @@ describe('ServiceNowSyncService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       } as never);
-      vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(null);
+      vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(
+        null
+      );
       vi.mocked(applicationRepository.applicationRepository.create).mockResolvedValue({
         id: 'app1',
         organizationId: 'org-default',
@@ -95,7 +95,9 @@ describe('ServiceNowSyncService', () => {
       };
 
       vi.mocked(mockClient.getPaginated).mockResolvedValue(cis);
-      vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(existingApp as never);
+      vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(
+        existingApp as never
+      );
       vi.mocked(applicationRepository.applicationRepository.update).mockResolvedValue({
         ...existingApp,
         name: 'Updated App',
@@ -124,7 +126,9 @@ describe('ServiceNowSyncService', () => {
       };
 
       vi.mocked(mockClient.getPaginated).mockResolvedValue(cis);
-      vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(existingApp as never);
+      vi.mocked(applicationRepository.applicationRepository.findByExternalId).mockResolvedValue(
+        existingApp as never
+      );
 
       const result = await syncService.syncApplicationsFromServiceNow(undefined, undefined, true);
 

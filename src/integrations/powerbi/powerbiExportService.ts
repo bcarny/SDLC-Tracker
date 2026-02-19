@@ -44,7 +44,7 @@ export class PowerBIExportService {
 
     try {
       // Get or create dataset
-      let datasetId = await this.findOrCreateDataset();
+      const datasetId = await this.findOrCreateDataset();
 
       if (clearExisting) {
         // Clear all tables
@@ -53,7 +53,9 @@ export class PowerBIExportService {
           try {
             await this.client.clearRows(datasetId, table.name);
           } catch (error) {
-            result.errors.push(`Failed to clear table ${table.name}: ${error instanceof Error ? error.message : String(error)}`);
+            result.errors.push(
+              `Failed to clear table ${table.name}: ${error instanceof Error ? error.message : String(error)}`
+            );
           }
         }
       }
@@ -69,7 +71,9 @@ export class PowerBIExportService {
           result.applicationsExported = appRows.length;
         }
       } catch (error) {
-        result.errors.push(`Failed to export applications: ${error instanceof Error ? error.message : String(error)}`);
+        result.errors.push(
+          `Failed to export applications: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
 
       // Export assessments
@@ -92,7 +96,9 @@ export class PowerBIExportService {
           result.assessmentsExported = assessmentRows.length;
         }
       } catch (error) {
-        result.errors.push(`Failed to export assessments: ${error instanceof Error ? error.message : String(error)}`);
+        result.errors.push(
+          `Failed to export assessments: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
 
       // Export teams
@@ -104,7 +110,9 @@ export class PowerBIExportService {
           result.teamsExported = teamRows.length;
         }
       } catch (error) {
-        result.errors.push(`Failed to export teams: ${error instanceof Error ? error.message : String(error)}`);
+        result.errors.push(
+          `Failed to export teams: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
 
       // Export application-team relationships
@@ -116,12 +124,7 @@ export class PowerBIExportService {
           if (app.teams) {
             for (const appTeam of app.teams) {
               appTeamRows.push(
-                mapApplicationTeamToPowerBI(
-                  app.id,
-                  appTeam.teamId,
-                  appTeam.role,
-                  appTeam.createdAt
-                )
+                mapApplicationTeamToPowerBI(app.id, appTeam.teamId, appTeam.role, appTeam.createdAt)
               );
             }
           }
@@ -132,10 +135,14 @@ export class PowerBIExportService {
           result.applicationTeamsExported = appTeamRows.length;
         }
       } catch (error) {
-        result.errors.push(`Failed to export application-teams: ${error instanceof Error ? error.message : String(error)}`);
+        result.errors.push(
+          `Failed to export application-teams: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     } catch (error) {
-      result.errors.push(`Failed to export to PowerBI: ${error instanceof Error ? error.message : String(error)}`);
+      result.errors.push(
+        `Failed to export to PowerBI: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     return result;

@@ -31,7 +31,9 @@ export class ServiceNowClient {
       // OAuth will be handled separately
       this.authHeader = '';
     } else if (env.SERVICENOW_USER && env.SERVICENOW_PASSWORD) {
-      const credentials = Buffer.from(`${env.SERVICENOW_USER}:${env.SERVICENOW_PASSWORD}`).toString('base64');
+      const credentials = Buffer.from(`${env.SERVICENOW_USER}:${env.SERVICENOW_PASSWORD}`).toString(
+        'base64'
+      );
       this.authHeader = `Basic ${credentials}`;
     } else {
       throw new Error('ServiceNow authentication credentials are required');
@@ -59,7 +61,7 @@ export class ServiceNowClient {
       throw new Error(`ServiceNow OAuth authentication failed: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { access_token: string };
     return data.access_token;
   }
 
@@ -83,8 +85,8 @@ export class ServiceNowClient {
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'Authorization': authHeader,
-        'Accept': 'application/json',
+        Authorization: authHeader,
+        Accept: 'application/json',
       },
     });
 
@@ -92,7 +94,7 @@ export class ServiceNowClient {
       throw new Error(`ServiceNow API error: ${response.status} ${response.statusText}`);
     }
 
-    const data: ServiceNowResponse<T> = await response.json();
+    const data = (await response.json()) as ServiceNowResponse<T>;
     return data.result;
   }
 
@@ -119,8 +121,8 @@ export class ServiceNowClient {
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
-          'Authorization': authHeader,
-          'Accept': 'application/json',
+          Authorization: authHeader,
+          Accept: 'application/json',
         },
       });
 
@@ -128,7 +130,7 @@ export class ServiceNowClient {
         throw new Error(`ServiceNow API error: ${response.status} ${response.statusText}`);
       }
 
-      const data: ServiceNowResponse<T> = await response.json();
+      const data = (await response.json()) as ServiceNowResponse<T>;
       const items = data.result;
 
       if (items.length === 0) {
@@ -153,19 +155,21 @@ export class ServiceNowClient {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': authHeader,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify(data),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`ServiceNow API error: ${response.status} ${response.statusText} - ${errorText}`);
+      throw new Error(
+        `ServiceNow API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
     }
 
-    const result: ServiceNowResponse<T> = await response.json();
+    const result = (await response.json()) as ServiceNowResponse<T>;
     return result.result[0];
   }
 
@@ -176,19 +180,21 @@ export class ServiceNowClient {
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
-        'Authorization': authHeader,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify(data),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`ServiceNow API error: ${response.status} ${response.statusText} - ${errorText}`);
+      throw new Error(
+        `ServiceNow API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
     }
 
-    const result: ServiceNowResponse<T> = await response.json();
+    const result = (await response.json()) as ServiceNowResponse<T>;
     return result.result[0];
   }
 }

@@ -1,15 +1,15 @@
-import { prisma } from '../config/db.js'
+import { prisma } from '../config/db.js';
 
 export type CreateOrganizationInput = {
-  name: string
-  description?: string | null
-}
+  name: string;
+  description?: string | null;
+};
 
-export type UpdateOrganizationInput = Partial<CreateOrganizationInput>
+export type UpdateOrganizationInput = Partial<CreateOrganizationInput>;
 
 export const organizationRepository = {
   async create(data: CreateOrganizationInput) {
-    return prisma.organization.create({ data })
+    return prisma.organization.create({ data });
   },
 
   async findById(id: string) {
@@ -19,7 +19,7 @@ export const organizationRepository = {
         applications: { include: { teams: { include: { team: true } } } },
         teams: true,
       },
-    })
+    });
   },
 
   async list() {
@@ -29,27 +29,27 @@ export const organizationRepository = {
         applications: { include: { teams: { include: { team: true } } } },
         teams: true,
       },
-    })
+    });
   },
 
   async update(id: string, data: UpdateOrganizationInput) {
     return prisma.organization.update({
       where: { id },
       data,
-    })
+    });
   },
 
   async delete(id: string) {
-    return prisma.organization.delete({ where: { id } })
+    return prisma.organization.delete({ where: { id } });
   },
 
   async findByName(name: string) {
     return prisma.organization.findFirst({
       where: { name },
-    })
+    });
   },
 
   async findFirst() {
-    return prisma.organization.findFirst({ orderBy: { name: 'asc' } })
+    return prisma.organization.findFirst({ orderBy: { name: 'asc' } });
   },
-}
+};

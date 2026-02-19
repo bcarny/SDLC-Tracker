@@ -24,24 +24,34 @@ vi.mock('./services/organizationService.js', () => ({
   },
 }));
 
+// Mock searchService for GET /api/search
+vi.mock('./services/searchService.js', () => ({
+  searchService: {
+    search: vi.fn(),
+  },
+}));
+
 // Helper function to simulate HTTP requests without supertest
 function makeRequest(
   app: Express,
   method: string,
-  path: string
+  path: string,
+  options?: { query?: Record<string, string> }
 ): Promise<{ status: number; body: unknown; headers: Record<string, string> }> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string> = {};
     let body: unknown = null;
     let statusCode = 200;
 
+    const [pathname, search] = path.split('?');
+    const query = options?.query ?? (search ? Object.fromEntries(new URLSearchParams(search)) : {});
     const req = {
       method,
       url: path,
-      path,
+      path: pathname,
       headers: {},
       body: {},
-      query: {},
+      query,
       params: {},
       ip: '127.0.0.1',
       protocol: 'http',
@@ -147,7 +157,13 @@ describe('app', () => {
   it('GET /api/organizations returns 200 and array', async () => {
     const { organizationService } = await import('./services/organizationService.js');
     vi.mocked(organizationService.list).mockResolvedValue([
-      { id: 'org-1', name: 'Test Org', description: null, createdAt: new Date(), updatedAt: new Date() },
+      {
+        id: 'org-1',
+        name: 'Test Org',
+        description: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
     ] as never);
 
     const res = await makeRequest(app, 'GET', '/api/organizations');
@@ -183,5 +199,33 @@ describe('app', () => {
     const res = await makeRequest(app, 'GET', '/api/organizations/missing');
     expect(res.status).toBe(404);
     expect((res.body as { error?: string }).error).toBe('Organization not found');
+  });
+
+  it('GET /api/search returns 200 and search results when q is provided', async () => {
+    const { searchService } = await import('./services/searchService.js');
+    vi.mocked(searchService.search).mockResolvedValue({
+      organizations: [{ id: 'org-1', name: 'Test Org', description: null, matchType: 'name' }],
+      applications: [],
+      teams: [],
+    });
+
+    const res = await makeRequest(app, 'GET', '/api/search', { query: { q: 'test' } });
+    expect(res.status).toBe(200);
+    const body = res.body as {
+      organizations?: unknown[];
+      applications?: unknown[];
+      teams?: unknown[];
+    };
+    expect(Array.isArray(body.organizations)).toBe(true);
+    expect(Array.isArray(body.applications)).toBe(true);
+    expect(Array.isArray(body.teams)).toBe(true);
+    expect(body.organizations?.length).toBe(1);
+    expect((body.organizations?.[0] as { name: string }).name).toBe('Test Org');
+  });
+
+  it('GET /api/search returns 400 when q is missing', async () => {
+    const res = await makeRequest(app, 'GET', '/api/search');
+    expect(res.status).toBe(400);
+    expect((res.body as { error?: string }).error).toBeDefined();
   });
 });

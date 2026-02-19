@@ -14,7 +14,7 @@ const saveAssessmentSchema = z.object({
 assessmentRoutes.post('/', async (req, res) => {
   const parsed = saveAssessmentSchema.safeParse(req.body);
   if (!parsed.success) return handleValidationError(parsed.error, res);
-  
+
   try {
     const assessment = await assessmentService.saveAssessment(
       parsed.data.applicationId,

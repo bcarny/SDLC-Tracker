@@ -74,7 +74,7 @@ export class PowerBIClient {
       throw new Error(`PowerBI OAuth authentication failed: ${response.status} ${errorText}`);
     }
 
-    const data: PowerBITokenResponse = await response.json();
+    const data = (await response.json()) as PowerBITokenResponse;
     this.accessToken = data.access_token;
     this.tokenExpiry = new Date(Date.now() + (data.expires_in - 300) * 1000); // Refresh 5 min before expiry
     return this.accessToken;
@@ -87,7 +87,7 @@ export class PowerBIClient {
     const response = await fetch(url, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         ...options.headers,
       },
@@ -95,29 +95,37 @@ export class PowerBIClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`PowerBI API error: ${response.status} ${response.statusText} - ${errorText}`);
+      throw new Error(
+        `PowerBI API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
     }
 
     if (response.status === 204) {
       return {} as T;
     }
 
-    return response.json();
+    return (await response.json()) as T;
   }
 
   async getDatasets(): Promise<PowerBIDataset[]> {
-    const workspaceEndpoint = this.workspaceId ? `/groups/${this.workspaceId}/datasets` : '/datasets';
+    const workspaceEndpoint = this.workspaceId
+      ? `/groups/${this.workspaceId}/datasets`
+      : '/datasets';
     const response = await this.apiRequest<{ value: PowerBIDataset[] }>(workspaceEndpoint);
     return response.value || [];
   }
 
   async getDataset(datasetId: string): Promise<PowerBIDataset> {
-    const workspaceEndpoint = this.workspaceId ? `/groups/${this.workspaceId}/datasets/${datasetId}` : `/datasets/${datasetId}`;
+    const workspaceEndpoint = this.workspaceId
+      ? `/groups/${this.workspaceId}/datasets/${datasetId}`
+      : `/datasets/${datasetId}`;
     return this.apiRequest<PowerBIDataset>(workspaceEndpoint);
   }
 
   async createDataset(name: string, tables: PowerBITable[]): Promise<PowerBIDataset> {
-    const workspaceEndpoint = this.workspaceId ? `/groups/${this.workspaceId}/datasets` : '/datasets';
+    const workspaceEndpoint = this.workspaceId
+      ? `/groups/${this.workspaceId}/datasets`
+      : '/datasets';
     return this.apiRequest<PowerBIDataset>(workspaceEndpoint, {
       method: 'POST',
       body: JSON.stringify({
@@ -128,8 +136,14 @@ export class PowerBIClient {
     });
   }
 
-  async pushRows(datasetId: string, tableName: string, rows: Record<string, unknown>[]): Promise<void> {
-    const workspaceEndpoint = this.workspaceId ? `/groups/${this.workspaceId}/datasets/${datasetId}/tables/${tableName}/rows` : `/datasets/${datasetId}/tables/${tableName}/rows`;
+  async pushRows(
+    datasetId: string,
+    tableName: string,
+    rows: Record<string, unknown>[]
+  ): Promise<void> {
+    const workspaceEndpoint = this.workspaceId
+      ? `/groups/${this.workspaceId}/datasets/${datasetId}/tables/${tableName}/rows`
+      : `/datasets/${datasetId}/tables/${tableName}/rows`;
     await this.apiRequest(workspaceEndpoint, {
       method: 'POST',
       body: JSON.stringify({ rows }),
@@ -137,14 +151,18 @@ export class PowerBIClient {
   }
 
   async clearRows(datasetId: string, tableName: string): Promise<void> {
-    const workspaceEndpoint = this.workspaceId ? `/groups/${this.workspaceId}/datasets/${datasetId}/tables/${tableName}/rows` : `/datasets/${datasetId}/tables/${tableName}/rows`;
+    const workspaceEndpoint = this.workspaceId
+      ? `/groups/${this.workspaceId}/datasets/${datasetId}/tables/${tableName}/rows`
+      : `/datasets/${datasetId}/tables/${tableName}/rows`;
     await this.apiRequest(workspaceEndpoint, {
       method: 'DELETE',
     });
   }
 
   async deleteDataset(datasetId: string): Promise<void> {
-    const workspaceEndpoint = this.workspaceId ? `/groups/${this.workspaceId}/datasets/${datasetId}` : `/datasets/${datasetId}`;
+    const workspaceEndpoint = this.workspaceId
+      ? `/groups/${this.workspaceId}/datasets/${datasetId}`
+      : `/datasets/${datasetId}`;
     await this.apiRequest(workspaceEndpoint, {
       method: 'DELETE',
     });

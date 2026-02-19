@@ -8,6 +8,7 @@ import { teamRoutes } from './routes/teamRoutes.js';
 import { assessmentRoutes } from './routes/assessmentRoutes.js';
 import { servicenowRoutes } from './integrations/servicenow/servicenowRoutes.js';
 import { powerbiRoutes } from './integrations/powerbi/powerbiRoutes.js';
+import { searchRoutes } from './routes/searchRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,7 @@ export function createApp() {
   app.use('/api/assessments', assessmentRoutes);
   app.use('/api/integrations/servicenow', servicenowRoutes);
   app.use('/api/integrations/powerbi', powerbiRoutes);
+  app.use('/api/search', searchRoutes);
 
   app.get('/api', (_req, res) => {
     res.json({
@@ -39,7 +41,11 @@ export function createApp() {
 
   // Catch-all: if no route matched, we still respond with JSON (proves this server was hit)
   app.use((_req, res) => {
-    res.status(404).json({ error: 'Not found', path: _req.path, message: 'No route matched. Use the URL from the terminal (e.g. http://localhost:3000).' });
+    res.status(404).json({
+      error: 'Not found',
+      path: _req.path,
+      message: 'No route matched. Use the URL from the terminal (e.g. http://localhost:3000).',
+    });
   });
 
   return app;

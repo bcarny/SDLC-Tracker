@@ -107,6 +107,13 @@ function SDLCMaturityTracker() {
     const [editingOrgId, setEditingOrgId] = useState(null);
     const [editingOrgName, setEditingOrgName] = useState("");
     const [appSearchQuery, setAppSearchQuery] = useState("");
+    const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+    const [globalSearchResults, setGlobalSearchResults] = useState({ organizations: [], applications: [], teams: [] });
+    const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+    const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
+    const [searchFacets, setSearchFacets] = useState({ entityType: ['organization', 'application', 'team'], appType: '', appSource: '', orgOnly: false });
+    const globalSearchDebounceRef = useRef(null);
+    const globalSearchInputRef = useRef(null);
     const [confirmModal, setConfirmModal] = useState(null); // { title, message, onConfirm, type: 'delete-org'|'delete-team' }
     const [isSaving, setIsSaving] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -236,6 +243,80 @@ function SDLCMaturityTracker() {
                 }
             },
         });
+    };
+
+    const runGlobalSearch = async () => {
+        const q = globalSearchQuery.trim();
+        if (!q) {
+            setGlobalSearchResults({ organizations: [], applications: [], teams: [] });
+            return;
+        }
+        setGlobalSearchLoading(true);
+        try {
+            const params = new URLSearchParams({ q });
+            (searchFacets.entityType || ['organization', 'application', 'team']).forEach(t => params.append('entityType', t));
+            if (searchFacets.appType) params.set('appType', searchFacets.appType);
+            if (searchFacets.appSource) params.set('appSource', searchFacets.appSource);
+            if (searchFacets.orgOnly && selectedOrganizationId) params.set('organizationId', selectedOrganizationId);
+            const res = await fetch(API + '/search?' + params.toString());
+            if (!res.ok) throw new Error(res.statusText);
+            const data = await res.json();
+            setGlobalSearchResults(data);
+        } catch (err) {
+            setGlobalSearchResults({ organizations: [], applications: [], teams: [] });
+        } finally {
+            setGlobalSearchLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (globalSearchDebounceRef.current) clearTimeout(globalSearchDebounceRef.current);
+        if (!globalSearchQuery.trim()) {
+            setGlobalSearchResults({ organizations: [], applications: [], teams: [] });
+            setGlobalSearchLoading(false);
+            return;
+        }
+        setGlobalSearchLoading(true);
+        globalSearchDebounceRef.current = setTimeout(() => {
+            runGlobalSearch();
+            globalSearchDebounceRef.current = null;
+        }, 250);
+        return () => { if (globalSearchDebounceRef.current) clearTimeout(globalSearchDebounceRef.current); };
+    }, [globalSearchQuery, searchFacets.entityType, searchFacets.appType, searchFacets.appSource, searchFacets.orgOnly, selectedOrganizationId]);
+
+    useEffect(() => {
+        const onKeyDown = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setGlobalSearchOpen(true);
+                setTimeout(() => globalSearchInputRef.current?.focus(), 0);
+            }
+            if (e.key === 'Escape') setGlobalSearchOpen(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
+
+    const handleSearchResultClick = (type, item) => {
+        setGlobalSearchOpen(false);
+        setGlobalSearchQuery('');
+        if (type === 'organization') {
+            setSelectedOrganizationIdAndUrl(item.id);
+            setView('applications');
+            setSelectedApplication(null);
+        } else if (type === 'application') {
+            setSelectedOrganizationIdAndUrl(item.organizationId);
+            openApplicationDetail(item);
+        } else if (type === 'team') {
+            setSelectedOrganizationIdAndUrl(item.organizationId || selectedOrganizationId);
+            setView('teams');
+        }
+    };
+
+    const toggleSearchEntityType = (t) => {
+        const current = searchFacets.entityType || ['organization', 'application', 'team'];
+        const next = current.includes(t) ? current.filter(x => x !== t) : [...current, t];
+        setSearchFacets(f => ({ ...f, entityType: next.length ? next : ['organization', 'application', 'team'] }));
     };
 
     useEffect(() => { loadOrganizations(); }, []);
@@ -692,9 +773,107 @@ function SDLCMaturityTracker() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
             <div className="max-w-7xl mx-auto">
-                <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-lg shadow-2xl p-6 mb-6 border border-cyan-500/30">
-                    <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mb-2">AppCompass</h1>
-                    <p className="text-slate-300">Navigating the wild landscape of our software lifecycle.</p>
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-lg shadow-2xl p-6 mb-6 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 mb-2">AppCompass</h1>
+                        <p className="text-slate-300">Navigating the wild landscape of our software lifecycle.</p>
+                    </div>
+                    <div className="relative shrink-0 w-full sm:w-80">
+                        <input
+                            ref={globalSearchInputRef}
+                            type="search"
+                            value={globalSearchQuery}
+                            onChange={e => setGlobalSearchQuery(e.target.value)}
+                            onFocus={() => setGlobalSearchOpen(true)}
+                            placeholder="Search organizations, applications, teams…"
+                            className="w-full px-4 py-2 bg-slate-700/80 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                            aria-label="Global search"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">⌘K</span>
+                        {globalSearchOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setGlobalSearchOpen(false)} aria-hidden="true" />
+                                <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl overflow-hidden max-h-[70vh] flex flex-col min-w-[320px]">
+                                    <div className="p-2 border-b border-slate-600 flex flex-wrap gap-2">
+                                        <span className="text-slate-500 text-xs self-center">Filter:</span>
+                                        {['organization', 'application', 'team'].map(t => (
+                                            <button
+                                                key={t}
+                                                onClick={() => toggleSearchEntityType(t)}
+                                                className={`px-2 py-1 rounded text-xs font-medium ${(searchFacets.entityType || []).includes(t) ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50' : 'bg-slate-700 text-slate-400 border border-slate-600 hover:bg-slate-600'}`}
+                                            >
+                                                {t.charAt(0).toUpperCase() + t.slice(1)}
+                                            </button>
+                                        ))}
+                                        {selectedOrganizationId && (
+                                            <label className="flex items-center gap-1.5 text-slate-400 text-xs cursor-pointer">
+                                                <input type="checkbox" checked={searchFacets.orgOnly || false} onChange={e => setSearchFacets(f => ({ ...f, orgOnly: e.target.checked }))} className="rounded" />
+                                                Current org
+                                            </label>
+                                        )}
+                                        {(searchFacets.entityType || []).includes('application') && (
+                                            <>
+                                                <select value={searchFacets.appType} onChange={e => setSearchFacets(f => ({ ...f, appType: e.target.value }))} className="px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-300">
+                                                    <option value="">All types</option>
+                                                    <option value="Custom">Custom</option>
+                                                    <option value="SaaS">SaaS</option>
+                                                    <option value="COTS">COTS</option>
+                                                </select>
+                                                <select value={searchFacets.appSource} onChange={e => setSearchFacets(f => ({ ...f, appSource: e.target.value }))} className="px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-300">
+                                                    <option value="">All sources</option>
+                                                    <option value="manual">Manual</option>
+                                                    <option value="servicenow">ServiceNow</option>
+                                                </select>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="overflow-auto flex-1 p-2">
+                                        {globalSearchLoading && <p className="text-slate-500 text-sm py-4 text-center">Searching…</p>}
+                                        {!globalSearchLoading && !globalSearchQuery.trim() && <p className="text-slate-500 text-sm py-4 text-center">Type to search</p>}
+                                        {!globalSearchLoading && globalSearchQuery.trim() && !globalSearchResults.organizations?.length && !globalSearchResults.applications?.length && !globalSearchResults.teams?.length && (
+                                            <p className="text-slate-500 text-sm py-4 text-center">No results for &quot;{globalSearchQuery}&quot;</p>
+                                        )}
+                                        {!globalSearchLoading && (globalSearchResults.organizations?.length > 0 || globalSearchResults.applications?.length > 0 || globalSearchResults.teams?.length > 0) && (
+                                            <div className="space-y-3">
+                                                {globalSearchResults.organizations?.length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Organizations</div>
+                                                        {globalSearchResults.organizations.map(org => (
+                                                            <button key={org.id} onClick={() => handleSearchResultClick('organization', org)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700/80 text-slate-200 flex items-center gap-2">
+                                                                <span className="font-medium">{org.name}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {globalSearchResults.applications?.length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Applications</div>
+                                                        {globalSearchResults.applications.map(app => (
+                                                            <button key={app.id} onClick={() => handleSearchResultClick('application', app)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700/80 text-slate-200 flex flex-col gap-0.5">
+                                                                <span className="font-medium truncate">{app.name}</span>
+                                                                <span className="text-xs text-slate-500 flex items-center gap-2"><span className="px-1.5 py-0.5 rounded bg-slate-600 text-slate-400">{app.type}</span>{app.organizationName}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {globalSearchResults.teams?.length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Teams</div>
+                                                        {globalSearchResults.teams.map(team => (
+                                                            <button key={team.id} onClick={() => handleSearchResultClick('team', team)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700/80 text-slate-200 flex items-center gap-2">
+                                                                <span className="font-medium">{team.name}</span>
+                                                                <span className="text-xs text-slate-500">{team.organizationName || '—'}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {error && (

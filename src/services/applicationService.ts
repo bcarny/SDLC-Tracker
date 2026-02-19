@@ -1,10 +1,17 @@
 import { ApplicationSource, ApplicationType, TeamRole } from '@prisma/client';
-import type { CreateApplicationInput, UpdateApplicationInput } from '../repositories/applicationRepository.js';
+import type {
+  CreateApplicationInput,
+  UpdateApplicationInput,
+} from '../repositories/applicationRepository.js';
 import { applicationRepository } from '../repositories/applicationRepository.js';
 import { organizationRepository } from '../repositories/organizationRepository.js';
 import { teamRepository } from '../repositories/teamRepository.js';
 
-export type ApplicationFilters = { type?: ApplicationType; source?: ApplicationSource; organizationId?: string };
+export type ApplicationFilters = {
+  type?: ApplicationType;
+  source?: ApplicationSource;
+  organizationId?: string;
+};
 
 export const applicationService = {
   async create(data: CreateApplicationInput) {

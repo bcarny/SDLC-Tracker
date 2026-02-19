@@ -3,8 +3,6 @@ import {
   createPowerBIDatasetSchema,
   mapApplicationToPowerBI,
   mapAssessmentToPowerBI,
-  mapTeamToPowerBI,
-  mapApplicationTeamToPowerBI,
   calculateMaturityScore,
   getMaturityLevel,
 } from './powerbiMapper.js';
@@ -36,7 +34,7 @@ describe('powerbiMapper', () => {
         updatedAt: new Date('2024-01-02'),
       };
 
-      const result = mapApplicationToPowerBI(app as any);
+      const result = mapApplicationToPowerBI(app as Parameters<typeof mapApplicationToPowerBI>[0]);
 
       expect(result.ApplicationId).toBe('app1');
       expect(result.Name).toBe('Test App');
@@ -58,7 +56,11 @@ describe('powerbiMapper', () => {
         updatedAt: new Date('2024-01-01'),
       };
 
-      const result = mapAssessmentToPowerBI(assessment as any, 62, 'Advanced');
+      const result = mapAssessmentToPowerBI(
+        assessment as Parameters<typeof mapAssessmentToPowerBI>[0],
+        62,
+        'Advanced'
+      );
 
       expect(result.AssessmentId).toBe('assess1');
       expect(result.ApplicationId).toBe('app1');

@@ -30,7 +30,15 @@ describe('assessmentService', () => {
   describe('getAssessmentsForApplication', () => {
     it('returns list of assessments for application', async () => {
       const list = [
-        { id: 'a1', applicationId: 'app1', teamId: null, scoresSnapshot: { rp1: 1 }, assessmentDate: new Date(), updatedAt: new Date(), team: null },
+        {
+          id: 'a1',
+          applicationId: 'app1',
+          teamId: null,
+          scoresSnapshot: { rp1: 1 },
+          assessmentDate: new Date(),
+          updatedAt: new Date(),
+          team: null,
+        },
       ];
       vi.mocked(repo.listByApplication).mockResolvedValue(list as never);
 

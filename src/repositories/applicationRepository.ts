@@ -36,7 +36,11 @@ export const applicationRepository = {
     });
   },
 
-  async list(filters?: { type?: ApplicationType; source?: ApplicationSource; organizationId?: string }) {
+  async list(filters?: {
+    type?: ApplicationType;
+    source?: ApplicationSource;
+    organizationId?: string;
+  }) {
     const where: Prisma.ApplicationWhereInput = {};
     if (filters?.type) where.type = filters.type;
     if (filters?.source) where.source = filters.source;

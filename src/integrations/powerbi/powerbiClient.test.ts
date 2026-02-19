@@ -53,7 +53,9 @@ describe('PowerBIClient', () => {
       } as Response);
 
       const client = new PowerBIClient();
-      const token = await (client as any).getAccessToken();
+      const token = await (
+        client as unknown as { getAccessToken: () => Promise<string> }
+      ).getAccessToken();
 
       expect(token).toBe('test-token');
       expect(global.fetch).toHaveBeenCalledWith(
@@ -77,8 +79,9 @@ describe('PowerBIClient', () => {
       } as Response);
 
       const client = new PowerBIClient();
-      const token1 = await (client as any).getAccessToken();
-      const token2 = await (client as any).getAccessToken();
+      const clientCast = client as unknown as { getAccessToken: () => Promise<string> };
+      const token1 = await clientCast.getAccessToken();
+      const token2 = await clientCast.getAccessToken();
 
       expect(token1).toBe(token2);
       expect(global.fetch).toHaveBeenCalledTimes(1);

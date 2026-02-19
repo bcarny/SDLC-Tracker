@@ -8,11 +8,7 @@ export const assessmentService = {
     return assessmentRepository.listByApplication(applicationId);
   },
 
-  async saveAssessment(
-    applicationId: string,
-    scores: ScoresSnapshot,
-    teamId?: string | null
-  ) {
+  async saveAssessment(applicationId: string, scores: ScoresSnapshot, teamId?: string | null) {
     const app = await applicationRepository.findById(applicationId);
     if (!app) throw new Error('Application not found');
     if (teamId != null) {

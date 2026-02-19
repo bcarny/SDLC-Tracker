@@ -55,7 +55,10 @@ servicenowRoutes.post('/sync/teams', async (req, res) => {
 
     const client = new ServiceNowClient();
     const syncService = new ServiceNowSyncService(client);
-    const result = await syncService.syncTeamsFromServiceNow(parsed.data.tableName, parsed.data.query);
+    const result = await syncService.syncTeamsFromServiceNow(
+      parsed.data.tableName,
+      parsed.data.query
+    );
 
     res.json({
       success: true,

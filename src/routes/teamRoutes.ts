@@ -35,7 +35,7 @@ teamRoutes.get('/:id', async (req, res) => {
 teamRoutes.post('/', async (req, res) => {
   const parsed = createTeamSchema.safeParse(req.body);
   if (!parsed.success) return handleValidationError(parsed.error, res);
-  
+
   try {
     const team = await teamService.create(parsed.data);
     res.status(201).json(team);
@@ -47,7 +47,7 @@ teamRoutes.post('/', async (req, res) => {
 teamRoutes.patch('/:id', async (req, res) => {
   const parsed = updateTeamSchema.safeParse(req.body);
   if (!parsed.success) return handleValidationError(parsed.error, res);
-  
+
   try {
     const team = await teamService.update(req.params.id, parsed.data);
     res.json(team);

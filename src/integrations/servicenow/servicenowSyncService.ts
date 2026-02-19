@@ -1,7 +1,11 @@
 import { ApplicationSource } from '@prisma/client';
 import { ServiceNowClient } from './servicenowClient.js';
 import type { ServiceNowCI, ServiceNowGroup } from './servicenowMapper.js';
-import { mapServiceNowCIToApplication, mapServiceNowGroupToTeam, extractTeamFromCI } from './servicenowMapper.js';
+import {
+  mapServiceNowCIToApplication,
+  mapServiceNowGroupToTeam,
+  extractTeamFromCI,
+} from './servicenowMapper.js';
 import { applicationRepository } from '../../repositories/applicationRepository.js';
 import { organizationRepository } from '../../repositories/organizationRepository.js';
 import { teamRepository } from '../../repositories/teamRepository.js';
@@ -77,32 +81,40 @@ export class ServiceNowSyncService {
           if (teamInfo && existing) {
             try {
               // Check if team exists
-              let team = await teamRepository.findByExternalId(teamInfo.sysId);
+              let team: { id: string } | null = await teamRepository.findByExternalId(
+                teamInfo.sysId
+              );
               if (!team) {
-                // Create team if it doesn't exist
                 team = await teamRepository.create({
                   externalId: teamInfo.sysId,
                   name: teamInfo.name,
                 });
                 result.teamsCreated++;
               }
+              const teamId = team.id;
 
               // Link team to application if not already linked
               const app = await applicationRepository.findById(existing.id);
-              const isLinked = app?.teams?.some((at) => at.teamId === team.id);
+              const isLinked = app?.teams?.some((at) => at.teamId === teamId);
               if (!isLinked) {
-                await applicationService.addTeamToApplication(existing.id, team.id);
+                await applicationService.addTeamToApplication(existing.id, teamId);
               }
             } catch (teamError) {
-              result.errors.push(`Failed to sync team for application ${ci.name}: ${teamError instanceof Error ? teamError.message : String(teamError)}`);
+              result.errors.push(
+                `Failed to sync team for application ${ci.name}: ${teamError instanceof Error ? teamError.message : String(teamError)}`
+              );
             }
           }
         } catch (error) {
-          result.errors.push(`Failed to sync application ${ci.name}: ${error instanceof Error ? error.message : String(error)}`);
+          result.errors.push(
+            `Failed to sync application ${ci.name}: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       }
     } catch (error) {
-      result.errors.push(`Failed to fetch applications from ServiceNow: ${error instanceof Error ? error.message : String(error)}`);
+      result.errors.push(
+        `Failed to fetch applications from ServiceNow: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     return result;
@@ -139,11 +151,15 @@ export class ServiceNowSyncService {
             result.teamsCreated++;
           }
         } catch (error) {
-          result.errors.push(`Failed to sync team ${group.name}: ${error instanceof Error ? error.message : String(error)}`);
+          result.errors.push(
+            `Failed to sync team ${group.name}: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       }
     } catch (error) {
-      result.errors.push(`Failed to fetch teams from ServiceNow: ${error instanceof Error ? error.message : String(error)}`);
+      result.errors.push(
+        `Failed to fetch teams from ServiceNow: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     return result;
@@ -162,7 +178,9 @@ export class ServiceNowSyncService {
     const assessments = app.assessments || [];
     const latestAssessment = assessments
       .filter((a) => !a.teamId)
-      .sort((a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime())[0];
+      .sort(
+        (a, b) => new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime()
+      )[0];
 
     if (!latestAssessment || !latestAssessment.scoresSnapshot) {
       throw new Error('No assessment found for this application');
@@ -193,14 +211,19 @@ export class ServiceNowSyncService {
 
     // Try to find existing assessment record
     try {
-      const existing = await this.client.get(tableName, `u_application=${app.externalId}`);
+      const existing = await this.client.get<{ sys_id: string }>(
+        tableName,
+        `u_application=${app.externalId}`
+      );
       if (existing.length > 0) {
         await this.client.put(tableName, existing[0].sys_id, assessmentData);
       } else {
         await this.client.post(tableName, assessmentData);
       }
     } catch (error) {
-      throw new Error(`Failed to sync assessment to ServiceNow: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to sync assessment to ServiceNow: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 }

@@ -54,7 +54,7 @@ applicationRoutes.get('/:id/assessments', async (req, res) => {
 applicationRoutes.post('/:id/teams', async (req, res) => {
   const parsed = addTeamSchema.safeParse(req.body);
   if (!parsed.success) return handleValidationError(parsed.error, res);
-  
+
   const applicationId = req.params.id?.trim();
   const teamId = parsed.data.teamId?.trim();
   if (!applicationId || !teamId) {
@@ -71,7 +71,8 @@ applicationRoutes.post('/:id/teams', async (req, res) => {
     const msg = (e as Error).message;
     if (msg.includes('expected pattern') || msg.includes('Invalid')) {
       return res.status(400).json({
-        error: 'Invalid application or team. Try going back to Applications, opening this app again, then link the team.',
+        error:
+          'Invalid application or team. Try going back to Applications, opening this app again, then link the team.',
       });
     }
     return handleServiceError(e, res, ['Application not found', 'Team not found']);
@@ -99,7 +100,7 @@ applicationRoutes.get('/:id', async (req, res) => {
 applicationRoutes.post('/', async (req, res) => {
   const parsed = createApplicationSchema.safeParse(req.body);
   if (!parsed.success) return handleValidationError(parsed.error, res);
-  
+
   try {
     const data = { ...parsed.data, source: parsed.data.source ?? 'manual' };
     const app = await applicationService.create(data);
@@ -112,7 +113,7 @@ applicationRoutes.post('/', async (req, res) => {
 applicationRoutes.patch('/:id', async (req, res) => {
   const parsed = updateApplicationSchema.safeParse(req.body);
   if (!parsed.success) return handleValidationError(parsed.error, res);
-  
+
   try {
     const app = await applicationService.update(req.params.id, parsed.data);
     res.json(app);
