@@ -1,16 +1,19 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 
 export type CreateTeamInput = {
   name: string;
   externalId?: string | null;
+  organizationId?: string | null;
 };
 
 export type UpdateTeamInput = Partial<CreateTeamInput>;
 
 export const teamRepository = {
   async create(data: CreateTeamInput) {
-    return prisma.team.create({ data });
+    const { organizationId, ...rest } = data;
+    return prisma.team.create({
+      data: { ...rest, organizationId: organizationId || undefined },
+    });
   },
 
   async findById(id: string) {
@@ -27,8 +30,10 @@ export const teamRepository = {
     });
   },
 
-  async list() {
+  async list(organizationId?: string | null) {
+    const where = organizationId ? { organizationId } : {};
     return prisma.team.findMany({
+      where,
       include: { applications: { include: { application: true } } },
       orderBy: { name: 'asc' },
     });

@@ -106,6 +106,13 @@ function SDLCMaturityTracker() {
     const [newOrgName, setNewOrgName] = useState("");
     const [editingOrgId, setEditingOrgId] = useState(null);
     const [editingOrgName, setEditingOrgName] = useState("");
+    const [appSearchQuery, setAppSearchQuery] = useState("");
+    const [confirmModal, setConfirmModal] = useState(null); // { title, message, onConfirm, type: 'delete-org'|'delete-team' }
+    const [isSaving, setIsSaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [isAddingApp, setIsAddingApp] = useState(false);
+    const [isAddingTeam, setIsAddingTeam] = useState(false);
+    const [isCreatingOrg, setIsCreatingOrg] = useState(false);
     const chartRef = useRef(null);
     const radarChartRef = useRef(null);
     const historyChartRef = useRef(null);
@@ -154,9 +161,10 @@ function SDLCMaturityTracker() {
         }
     };
 
-    const loadTeams = async () => {
+    const loadTeams = async (organizationId) => {
         try {
-            const res = await fetch(API + '/teams');
+            const url = organizationId ? API + '/teams?organizationId=' + encodeURIComponent(organizationId) : API + '/teams';
+            const res = await fetch(url);
             if (!res.ok) throw new Error(res.statusText);
             const data = await res.json();
             setTeams(data);
@@ -168,6 +176,7 @@ function SDLCMaturityTracker() {
     const createOrganization = async (e) => {
         e.preventDefault();
         if (!newOrgName.trim()) return;
+        setIsCreatingOrg(true);
         try {
             const res = await fetch(API + '/organizations', {
                 method: 'POST',
@@ -181,6 +190,8 @@ function SDLCMaturityTracker() {
             setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
+        } finally {
+            setIsCreatingOrg(false);
         }
     };
 
@@ -205,8 +216,12 @@ function SDLCMaturityTracker() {
     };
 
     const deleteOrganization = async (id, name) => {
-        if (!confirm(`Delete organization "${name}"? All applications in it will be removed.`)) return;
-        try {
+        setConfirmModal({
+            title: 'Delete Organization',
+            message: `Delete organization "${name}"? All applications in it will be removed.`,
+            onConfirm: async () => {
+                setConfirmModal(null);
+                try {
             const res = await fetch(API + '/organizations/' + id, { method: 'DELETE' });
             if (!res.ok) throw new Error((await res.json()).error || res.statusText);
             if (selectedOrganizationId === id) {
@@ -216,24 +231,18 @@ function SDLCMaturityTracker() {
             loadApplications(selectedOrganizationId || organizations.find(o => o.id !== id)?.id || null);
             setSuccessMessage('Organization deleted.');
             setTimeout(() => setSuccessMessage(null), 3000);
-        } catch (err) {
+                } catch (err) {
             setError(err.message);
-        }
+                }
+            },
+        });
     };
 
-    const loadApplicationDetail = async (id) => {
-        try {
-            const res = await fetch(API + '/applications/' + id);
-            if (!res.ok) throw new Error(res.statusText);
-            const app = await res.json();
-            setSelectedApplication(app);
-        } catch (err) {
-            setError(err.message);
-            setSelectedApplication(null);
-        }
-    };
-
-    useEffect(() => { loadOrganizations(); loadTeams(); }, []);
+    useEffect(() => { loadOrganizations(); }, []);
+    useEffect(() => {
+        const effectiveOrgId = selectedOrganizationId || (organizations.length ? organizations[0]?.id : null);
+        loadTeams(effectiveOrgId);
+    }, [selectedOrganizationId, organizations]);
 
     useEffect(() => {
         if (organizations.length === 0) return;
@@ -261,6 +270,7 @@ function SDLCMaturityTracker() {
             setError('Create an organization first, or select one from the dropdown.');
             return;
         }
+        setIsAddingApp(true);
         try {
             const res = await fetch(API + '/applications', {
                 method: 'POST',
@@ -275,6 +285,8 @@ function SDLCMaturityTracker() {
             setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
+        } finally {
+            setIsAddingApp(false);
         }
     };
 
@@ -362,17 +374,21 @@ function SDLCMaturityTracker() {
 
     const createTeam = async () => {
         if (!newTeamName.trim()) return;
+        const orgId = selectedOrganizationId || (organizations.length ? organizations[0]?.id : null);
+        setIsAddingTeam(true);
         try {
             const res = await fetch(API + '/teams', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newTeamName.trim() })
+                body: JSON.stringify({ name: newTeamName.trim(), organizationId: orgId || undefined })
             });
             if (!res.ok) throw new Error((await res.json()).error || res.statusText);
             setNewTeamName("");
-            await loadTeams();
+            await loadTeams(orgId);
         } catch (err) {
             setError(err.message);
+        } finally {
+            setIsAddingTeam(false);
         }
     };
 
@@ -395,10 +411,14 @@ function SDLCMaturityTracker() {
         }
     };
 
-    const deleteTeam = async (teamId, teamName) => {
-        if (!confirm('Remove team "' + (teamName || 'this team') + '"? This will unlink them from all applications.')) return;
-        setError(null);
-        try {
+    const deleteTeam = (teamId, teamName) => {
+        setConfirmModal({
+            title: 'Remove Team',
+            message: `Remove team "${teamName || 'this team'}"? This will unlink them from all applications.`,
+            onConfirm: async () => {
+                setConfirmModal(null);
+                setError(null);
+                try {
             const res = await fetch(API + '/teams/' + teamId, { method: 'DELETE' });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
@@ -407,9 +427,11 @@ function SDLCMaturityTracker() {
             await loadTeams();
             loadApplications(selectedOrganizationId || (organizations[0]?.id ?? null));
             if (selectedApplication) await loadApplicationDetail(selectedApplication.id);
-        } catch (err) {
+                } catch (err) {
             setError(err.message);
-        }
+                }
+            },
+        });
     };
 
     const openAssessment = (applicationId, teamId, existingScores) => {
@@ -421,6 +443,7 @@ function SDLCMaturityTracker() {
     const saveAssessment = async () => {
         if (!assessmentScope) return;
         setError(null);
+        setIsSaving(true);
         const payload = {
             applicationId: assessmentScope.applicationId,
             scores: assessmentData
@@ -447,6 +470,8 @@ function SDLCMaturityTracker() {
             setTimeout(() => setSuccessMessage(null), 3000);
         } catch (err) {
             setError(err.message);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -467,7 +492,11 @@ function SDLCMaturityTracker() {
     };
 
     const exportToCSV = async () => {
-        const apps = applications.length ? applications : await (await fetch(API + '/applications')).json();
+        setIsExporting(true);
+        try {
+        const orgId = selectedOrganizationId || (organizations.length ? organizations[0]?.id : null);
+        const url = orgId ? API + '/applications?organizationId=' + encodeURIComponent(orgId) : API + '/applications';
+        const apps = applications.length ? applications : await (await fetch(url)).json();
         const rows = [];
         for (const app of apps) {
             const res = await fetch(API + '/applications/' + app.id + '/assessments');
@@ -498,10 +527,15 @@ function SDLCMaturityTracker() {
         a.download = 'sdlc-maturity-export-' + new Date().toISOString().split('T')[0] + '.csv';
         a.click();
         URL.revokeObjectURL(a.href);
+        } finally { setIsExporting(false); }
     };
 
     const exportToJSON = async () => {
-        const apps = applications.length ? applications : await (await fetch(API + '/applications')).json();
+        setIsExporting(true);
+        try {
+        const orgId = selectedOrganizationId || (organizations.length ? organizations[0]?.id : null);
+        const url = orgId ? API + '/applications?organizationId=' + encodeURIComponent(orgId) : API + '/applications';
+        const apps = applications.length ? applications : await (await fetch(url)).json();
         const out = { exportDate: new Date().toISOString(), applications: [] };
         for (const app of apps) {
             const res = await fetch(API + '/applications/' + app.id + '/assessments');
@@ -525,10 +559,15 @@ function SDLCMaturityTracker() {
         a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(out, null, 2));
         a.download = 'sdlc-maturity-export-' + new Date().toISOString().split('T')[0] + '.json';
         a.click();
+        } finally { setIsExporting(false); }
     };
 
     const exportToExcel = async () => {
-        const apps = applications.length ? applications : await (await fetch(API + '/applications')).json();
+        setIsExporting(true);
+        try {
+        const orgId = selectedOrganizationId || (organizations.length ? organizations[0]?.id : null);
+        const url = orgId ? API + '/applications?organizationId=' + encodeURIComponent(orgId) : API + '/applications';
+        const apps = applications.length ? applications : await (await fetch(url)).json();
         const rows = [];
         for (const app of apps) {
             const res = await fetch(API + '/applications/' + app.id + '/assessments');
@@ -559,6 +598,7 @@ function SDLCMaturityTracker() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Maturity');
         XLSX.writeFile(wb, 'sdlc-maturity-export-' + new Date().toISOString().split('T')[0] + '.xlsx');
+        } finally { setIsExporting(false); }
     };
 
     useEffect(() => {
@@ -670,6 +710,19 @@ function SDLCMaturityTracker() {
                     </div>
                 )}
 
+                {confirmModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                        <div className="bg-slate-800 rounded-xl shadow-2xl border border-slate-600 p-6 max-w-md w-full">
+                            <h2 id="confirm-title" className="text-lg font-semibold text-slate-200 mb-2">{confirmModal.title}</h2>
+                            <p className="text-slate-400 text-sm mb-6">{confirmModal.message}</p>
+                            <div className="flex justify-end gap-3">
+                                <button onClick={() => setConfirmModal(null)} className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 border border-slate-600 font-medium">Cancel</button>
+                                <button onClick={() => confirmModal.onConfirm && confirmModal.onConfirm()} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 font-medium">Confirm</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {!selectedOrganizationId && organizations.length > 0 && (
                     <div className="space-y-8">
                         <div className="bg-slate-800 rounded-lg shadow-2xl p-6 border border-slate-700">
@@ -680,7 +733,7 @@ function SDLCMaturityTracker() {
                                     <span className="text-slate-400 text-sm block mb-1">Name</span>
                                     <input type="text" value={newOrgName} onChange={e => setNewOrgName(e.target.value)} placeholder="e.g. Engineering" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400" />
                                 </label>
-                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg">Add organization</button>
+                                <button type="submit" disabled={isCreatingOrg} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isCreatingOrg ? 'Creating…' : 'Add organization'}</button>
                             </form>
                         </div>
                         <div className="bg-slate-800 rounded-lg shadow-2xl p-8 border border-slate-700">
@@ -737,7 +790,7 @@ function SDLCMaturityTracker() {
                                     <span className="text-slate-400 text-sm block mb-1">Organization name</span>
                                     <input type="text" value={newOrgName} onChange={e => setNewOrgName(e.target.value)} placeholder="e.g. Engineering" className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400" />
                                 </label>
-                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg">Create organization</button>
+                                <button type="submit" disabled={isCreatingOrg} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isCreatingOrg ? 'Creating…' : 'Create organization'}</button>
                             </form>
                         </div>
                     </div>
@@ -761,9 +814,9 @@ function SDLCMaturityTracker() {
                                     <button onClick={() => setView("api")} className={`px-4 py-2 rounded-lg font-medium transition ${view === "api" ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg" : "bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600"}`}>Docs</button>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={exportToCSV} className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-lg hover:from-emerald-600 font-medium shadow-lg">Export CSV</button>
-                                    <button onClick={exportToExcel} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg hover:from-teal-600 font-medium shadow-lg">Export Excel</button>
-                                    <button onClick={exportToJSON} className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 font-medium shadow-lg">Export JSON</button>
+                                    <button onClick={exportToCSV} disabled={isExporting} className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-lg hover:from-emerald-600 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isExporting ? 'Exporting…' : 'Export CSV'}</button>
+                                    <button onClick={exportToExcel} disabled={isExporting} className="px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg hover:from-teal-600 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isExporting ? 'Exporting…' : 'Export Excel'}</button>
+                                    <button onClick={exportToJSON} disabled={isExporting} className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isExporting ? 'Exporting…' : 'Export JSON'}</button>
                                 </div>
                             </div>
                         </div>
@@ -820,7 +873,7 @@ function SDLCMaturityTracker() {
                                         <option value="COTS">COTS</option>
                                     </select>
                                 </label>
-                                <button type="submit" className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled={organizations.length === 0}>Add application</button>
+                                <button type="submit" disabled={organizations.length === 0 || isAddingApp} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isAddingApp ? 'Adding…' : 'Add application'}</button>
                             </form>
                         </div>
 
@@ -832,7 +885,15 @@ function SDLCMaturityTracker() {
                             </div>
                         ) : (
                             <>
-                                <div className="flex items-center gap-2 mb-4">
+                                <div className="flex items-center gap-4 flex-wrap mb-4">
+                                    <input
+                                        type="search"
+                                        value={appSearchQuery}
+                                        onChange={e => setAppSearchQuery(e.target.value)}
+                                        placeholder="Search applications…"
+                                        className="px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400 text-sm min-w-[180px]"
+                                        aria-label="Search applications by name"
+                                    />
                                     <span className="text-sm text-slate-400">View:</span>
                                     <button
                                         onClick={() => setApplicationsListViewMode("list")}
@@ -848,7 +909,17 @@ function SDLCMaturityTracker() {
                                     </button>
                                 </div>
                                 {(() => {
-                                    const withScore = applications.map(app => {
+                                    const q = (appSearchQuery || '').trim().toLowerCase();
+                                    const filtered = q ? applications.filter(app => app.name.toLowerCase().includes(q)) : applications;
+                                    if (filtered.length === 0 && applications.length > 0) {
+                                        return (
+                                            <div className="bg-slate-800 rounded-xl p-12 text-center border border-slate-600 border-dashed">
+                                                <p className="text-slate-400 mb-2">No applications match &quot;{appSearchQuery}&quot;.</p>
+                                                <p className="text-slate-500 text-sm">Try a different search term.</p>
+                                            </div>
+                                        );
+                                    }
+                                    const withScore = filtered.map(app => {
                                         const appAssess = app.assessments?.find(a => !a.teamId);
                                         const score = appAssess ? calculateMaturityScore(appAssess.scoresSnapshot) : 0;
                                         return { ...app, score };
@@ -1333,7 +1404,7 @@ function SDLCMaturityTracker() {
                         ))}
                         <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-700">
                             <button onClick={() => { setView("applicationDetail"); setAssessmentScope(null); }} className="px-6 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 font-medium border border-slate-600">Cancel</button>
-                            <button onClick={saveAssessment} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg">Save assessment</button>
+                            <button onClick={saveAssessment} disabled={isSaving} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">{isSaving ? 'Saving…' : 'Save assessment'}</button>
                         </div>
                     </div>
                 )}
@@ -1386,7 +1457,7 @@ function SDLCMaturityTracker() {
                         <p className="text-slate-400 text-sm mb-4">Create teams here; then link them to applications from each application’s detail view.</p>
                         <div className="flex gap-2 mb-6">
                             <input type="text" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} onKeyPress={e => e.key === 'Enter' && createTeam()} placeholder="Team name" className="flex-1 max-w-xs px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400" />
-                            <button onClick={createTeam} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium">Add team</button>
+                            <button onClick={createTeam} disabled={isAddingTeam} className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed">{isAddingTeam ? 'Adding…' : 'Add team'}</button>
                         </div>
                         <ul className="space-y-3">
                             {teams.map(t => {

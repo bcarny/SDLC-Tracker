@@ -215,4 +215,5 @@ Export maturity assessment data to PowerBI for visualization and reporting.
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) – Module layout and where to change what.
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) – CI/CD pipeline (dev → prod) and GitHub Actions setup.
 - FFIEC alignment: [Development, Acquisition, and Maintenance](https://ithandbook.ffiec.gov/it-booklets/development-acquisition-and-maintenance/).

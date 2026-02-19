@@ -2,8 +2,8 @@ import type { CreateTeamInput, UpdateTeamInput } from '../repositories/teamRepos
 import { teamRepository } from '../repositories/teamRepository.js';
 
 export const teamService = {
-  async list() {
-    return teamRepository.list();
+  async list(organizationId?: string | null) {
+    return teamRepository.list(organizationId);
   },
 
   async create(data: CreateTeamInput) {

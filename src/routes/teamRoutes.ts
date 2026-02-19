@@ -8,13 +8,15 @@ export const teamRoutes = Router();
 const createTeamSchema = z.object({
   name: z.string().min(1).max(500),
   externalId: z.string().max(255).optional().nullable(),
+  organizationId: z.string().optional().nullable(),
 });
 
 const updateTeamSchema = createTeamSchema.partial();
 
-teamRoutes.get('/', async (_req, res) => {
+teamRoutes.get('/', async (req, res) => {
   try {
-    const teams = await teamService.list();
+    const organizationId = (req.query.organizationId as string) || undefined;
+    const teams = await teamService.list(organizationId);
     res.json(teams);
   } catch (e) {
     return handleServiceError(e, res);
